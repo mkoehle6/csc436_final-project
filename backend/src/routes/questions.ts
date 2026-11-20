@@ -5,10 +5,14 @@ import { db } from "../db/client.js";
 import { questions } from "../db/schema.js";
 import { ApiErrors } from "../lib/errors.js";
 import { generateCharacterQuestions } from "../lib/questionGenerator.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { SCOPES } from "../auth/scopes.js";
+import { actorUserId, requireAuth, requireRole, requireScope } from "../middleware/auth.js";
 import { recordAudit } from "../lib/audit.js";
 
 export const questionsRouter = Router();
+
+/** Writes need a valid token (401), the operator role (403) and the questions:write scope (403). */
+const canWriteQuestions = [requireAuth, requireRole("operator"), requireScope(SCOPES.writeQuestions)];
 
 const listQuerySchema = z.object({
   count: z.coerce.number().int().min(1).max(20).default(5),
@@ -52,7 +56,7 @@ const createQuestionSchema = z.object({
 });
 
 /** POST /api/questions — operator-only write; records an audit event (F6, F9). */
-questionsRouter.post("/questions", requireAuth, requireRole("operator"), async (req, res, next) => {
+questionsRouter.post("/questions", ...canWriteQuestions, async (req, res, next) => {
   const parsed = createQuestionSchema.safeParse(req.body);
   if (!parsed.success) {
     next(ApiErrors.badRequest("Invalid question payload", parsed.error.flatten()));
@@ -65,7 +69,7 @@ questionsRouter.post("/questions", requireAuth, requireRole("operator"), async (
   try {
     const [created] = await db.insert(questions).values(parsed.data).returning();
     await recordAudit({
-      actorUserId: req.user?.sub ? Number(req.user.sub) : null,
+      actorUserId: actorUserId(req),
       action: "question.create",
       entityType: "question",
       entityId: created?.id,
@@ -81,8 +85,7 @@ questionsRouter.post("/questions", requireAuth, requireRole("operator"), async (
 /** DELETE /api/questions/:id — operator-only write; records an audit event. */
 questionsRouter.delete(
   "/questions/:id",
-  requireAuth,
-  requireRole("operator"),
+  ...canWriteQuestions,
   async (req, res, next) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -97,7 +100,7 @@ questionsRouter.delete(
       }
       await db.delete(questions).where(eq(questions.id, id));
       await recordAudit({
-        actorUserId: req.user?.sub ? Number(req.user.sub) : null,
+        actorUserId: actorUserId(req),
         action: "question.delete",
         entityType: "question",
         entityId: id,

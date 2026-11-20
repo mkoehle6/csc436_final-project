@@ -95,6 +95,49 @@ export const answers = sqliteTable(
 );
 
 /**
+ * In-flight OAuth logins (F7). One row per /auth/login redirect, holding the
+ * values Google must echo back (state, nonce) and the PKCE verifier we must
+ * present at the token endpoint. Rows are single-use: the callback deletes the
+ * row it consumes, and expired rows are swept on each new login.
+ * Keyed by `state` because that is exactly what the callback looks up.
+ */
+export const oauthLoginStates = sqliteTable("oauth_login_states", {
+  state: text("state").primaryKey(),
+  nonce: text("nonce").notNull(),
+  codeVerifier: text("code_verifier").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+});
+
+/**
+ * Server-side login sessions behind the httpOnly refresh cookie. Only the
+ * SHA-256 hash of the cookie value is stored, so a database leak does not
+ * leak usable sessions. `revoked_at` is set on logout instead of deleting.
+ */
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tokenHash: text("token_hash").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  },
+  (table) => [
+    // Every /auth/token call looks a session up by the hash of its cookie.
+    uniqueIndex("auth_sessions_token_hash_idx").on(table.tokenHash),
+    index("auth_sessions_user_id_idx").on(table.userId),
+  ],
+);
+
+/**
  * Append-only audit trail (F6): who (actor from validated token), what (action +
  * entity), when, and before/after state as JSON snapshots.
  */

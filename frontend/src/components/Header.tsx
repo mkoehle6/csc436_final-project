@@ -1,5 +1,6 @@
 import type { ChangeEvent } from "react";
 import type { QuestionCategory } from "../types/trivia";
+import { AuthControls } from "./AuthControls";
 
 interface HeaderProps {
   search: string;
@@ -43,6 +44,7 @@ export function Header({ search, onSearchChange, category, onCategoryChange }: H
           <option value="location">Location</option>
         </select>
       </div>
+      <AuthControls />
     </header>
   );
 }

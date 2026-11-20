@@ -11,10 +11,14 @@
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:rollback": "tsx src/db/migrateDown.ts",
+    "auth:keygen": "tsx src/scripts/keygen.ts",
+    "user:set-role": "tsx src/scripts/setRole.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
+    "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.4",
     "express": "^4.21.2",
     "jose": "^5.9.6",
@@ -24,6 +28,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/supertest": "^6.0.2",

@@ -1,26 +1,30 @@
+import cookieParser from "cookie-parser";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { pinoHttp } from "pino-http";
-import { ApiError } from "./lib/errors.js";
+import { ApiError, ApiErrors } from "./lib/errors.js";
+import { isAllowedOrigin } from "./lib/origins.js";
+import { authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
 import { questionsRouter } from "./routes/questions.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 
-/** D7: exact-origin CORS allowlist — never "*" with credentials. */
-const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? "http://localhost:5173")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
-
 export function createApp() {
   const app = express();
 
-  app.use(pinoHttp());
+  app.use(
+    pinoHttp({
+      // Never log credentials: bearer tokens or session/login cookies.
+      redact: ["req.headers.authorization", "req.headers.cookie", 'res.headers["set-cookie"]'],
+    }),
+  );
   app.use(express.json());
+  app.use(cookieParser());
 
+  // D7: exact-origin CORS allowlist (lib/origins.ts) — never "*" with credentials.
   app.use((req, res, next) => {
     const origin = req.header("origin");
-    if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
       res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -28,7 +32,7 @@ export function createApp() {
       res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
     }
     if (req.method === "OPTIONS") {
-      res.status(origin && ALLOWED_ORIGINS.includes(origin) ? 204 : 403).end();
+      res.status(isAllowedOrigin(origin) ? 204 : 403).end();
       return;
     }
     next();
@@ -47,6 +51,7 @@ export function createApp() {
   });
 
   app.use(healthRouter);
+  app.use(authRouter);
   app.use(
     "/api",
     rateLimit({ windowMs: 60_000, max: 120 }),
@@ -62,6 +67,11 @@ export function createApp() {
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ApiError) {
       res.status(err.statusCode).json(err.toJSON());
+      return;
+    }
+    // express.json() rejects malformed bodies with a 400-status SyntaxError; keep it a 400 (F3).
+    if (err instanceof SyntaxError && "status" in err && err.status === 400) {
+      res.status(400).json(ApiErrors.badRequest("Request body is not valid JSON").toJSON());
       return;
     }
     console.error(err);

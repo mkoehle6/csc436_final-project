@@ -27,11 +27,16 @@ docs/         Architecture + trust-boundary diagrams, runbook, postmortem
 # from the repo root
 npm install           # installs all workspaces (frontend, backend, ...)
 
-# backend: copy env, run migrations, start dev server
+# backend: copy env, create signing key, run migrations, start dev server
 cd backend
 Copy-Item .env.example .env
+#   then edit .env: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (see "Auth" below)
+npm run auth:keygen    # writes AUTH_PRIVATE_JWK into .env (never printed)
 npm run db:migrate
 npm run dev            # http://localhost:3001
+
+# after signing in once, make yourself an operator:
+npm run user:set-role -- you@example.com operator
 
 # frontend (separate terminal): copy env, start dev server
 cd ..\frontend
@@ -57,9 +62,25 @@ npm run dev             # http://localhost:5173
 - **Audit trail:** append-only `audit_log` table, written by
   `backend/src/lib/audit.ts`; the actor is always taken from the validated
   JWT, never from the request body.
-- **Auth:** OIDC access-token validation (`backend/src/auth/jwt.ts`) via
-  JWKS, with `requireAuth`/`requireRole` middleware enforcing two roles
-  (`viewer`, `operator`) from validated claims only.
+- **Auth:** Google is the identity provider; the backend issues its own
+  access tokens.
+  - `GET /auth/login` → Google (Authorization Code + PKCE S256, `state`,
+    `nonce`) → `GET /auth/callback` validates state, exchanges the code,
+    validates Google's ID token (JWKS signature, issuer, audience, expiry,
+    nonce), creates the user as `viewer` on first login, and sets an httpOnly
+    session cookie.
+  - `POST /auth/token` swaps that cookie for a 15-minute ES256 access token
+    (`typ: at+jwt`, `sub` = users.id, `role`, `scope`); `POST /auth/logout`
+    revokes the session. The public key is at `/.well-known/jwks.json`.
+  - `requireAuth`/`requireRole`/`requireScope` (`backend/src/middleware/auth.ts`)
+    check signature, issuer, audience, expiry, type, role and scope.
+    Roles → scopes: viewer = `trivia:read trivia:play`, operator adds
+    `questions:write` (`backend/src/auth/scopes.ts`).
+  - Google console setup: OAuth client of type *Web application*, authorized
+    redirect URI `http://localhost:3001/auth/callback` (plus each deployed
+    backend's `/auth/callback`).
+- **Rollback:** `npm run db:rollback` reverses the latest migration using
+  `backend/src/db/migrations-down/<tag>.down.sql`.
 - **Third-party integration:** `backend/src/integrations/simpsonsApi.ts`
   wraps The Simpsons API with a request timeout, bounded retry (5xx only),
   a TTL cache, zod runtime response validation, and typed errors for

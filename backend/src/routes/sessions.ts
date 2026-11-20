@@ -5,15 +5,16 @@ import { db } from "../db/client.js";
 import { answers, gameSessions, questions } from "../db/schema.js";
 import { ApiErrors } from "../lib/errors.js";
 import { computeScore } from "../lib/scoring.js";
-import { requireAuth } from "../middleware/auth.js";
+import { SCOPES } from "../auth/scopes.js";
+import { actorUserId, requireAuth, requireScope } from "../middleware/auth.js";
 import { recordAudit } from "../lib/audit.js";
 
 export const sessionsRouter = Router();
 
 /** POST /api/sessions — start a new game session for the authenticated user. */
-sessionsRouter.post("/sessions", requireAuth, async (req, res, next) => {
+sessionsRouter.post("/sessions", requireAuth, requireScope(SCOPES.play), async (req, res, next) => {
   try {
-    const userId = Number(req.user?.sub);
+    const userId = actorUserId(req);
     const [created] = await db.insert(gameSessions).values({ userId }).returning();
     await recordAudit({
       actorUserId: userId,
@@ -34,7 +35,7 @@ const submitAnswerSchema = z.object({
 });
 
 /** POST /api/sessions/:id/answers — record one answer; 404 if session or question is missing. */
-sessionsRouter.post("/sessions/:id/answers", requireAuth, async (req, res, next) => {
+sessionsRouter.post("/sessions/:id/answers", requireAuth, requireScope(SCOPES.play), async (req, res, next) => {
   const sessionId = Number(req.params.id);
   const parsed = submitAnswerSchema.safeParse(req.body);
   if (!Number.isInteger(sessionId) || sessionId <= 0) {
@@ -50,7 +51,7 @@ sessionsRouter.post("/sessions/:id/answers", requireAuth, async (req, res, next)
     const session = await db.query.gameSessions.findFirst({
       where: eq(gameSessions.id, sessionId),
     });
-    if (!session || session.userId !== Number(req.user?.sub)) {
+    if (!session || session.userId !== actorUserId(req)) {
       next(ApiErrors.notFound("Session not found"));
       return;
     }
@@ -80,7 +81,7 @@ sessionsRouter.post("/sessions/:id/answers", requireAuth, async (req, res, next)
 });
 
 /** GET /api/sessions/:id — fetch a session's current score using the shared scoring calculation. */
-sessionsRouter.get("/sessions/:id", requireAuth, async (req, res, next) => {
+sessionsRouter.get("/sessions/:id", requireAuth, requireScope(SCOPES.read), async (req, res, next) => {
   const sessionId = Number(req.params.id);
   if (!Number.isInteger(sessionId) || sessionId <= 0) {
     next(ApiErrors.badRequest("id must be a positive integer"));
@@ -90,7 +91,7 @@ sessionsRouter.get("/sessions/:id", requireAuth, async (req, res, next) => {
     const session = await db.query.gameSessions.findFirst({
       where: eq(gameSessions.id, sessionId),
     });
-    if (!session || session.userId !== Number(req.user?.sub)) {
+    if (!session || session.userId !== actorUserId(req)) {
       next(ApiErrors.notFound("Session not found"));
       return;
     }

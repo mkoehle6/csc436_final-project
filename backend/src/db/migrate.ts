@@ -1,3 +1,4 @@
+import "../env.js"; // must stay first: loads .env before db/client.js reads DATABASE_URL
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { db, sqlite } from "./client.js";
 

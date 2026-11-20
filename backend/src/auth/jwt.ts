@@ -1,37 +1,36 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { jwtVerify, type JWTPayload } from "jose";
+import { authConfig } from "./config.js";
+import { getSigningKey } from "./keys.js";
+import { isRole, type Role } from "./scopes.js";
 
 /**
- * Server-side OIDC access-token validation (F8): signature via JWKS, issuer,
- * audience, expiry (handled by jwtVerify), and scope (checked by callers).
+ * Server-side access-token validation (F8). Every check is explicit:
+ *  - signature: ES256 against our published JWKS (rejects other keys and `alg: none`)
+ *  - `typ`: must be `at+jwt`, so a Google ID token or other JWT cannot be replayed here
+ *  - issuer and audience: must be this backend and this API
+ *  - expiry: `exp` is required and enforced (jose also rejects `nbf` in the future)
+ *  - role: must be a known role; scope is enforced per route by `requireScope`
  *
- * Configured for Google as the OIDC provider (F7). Swap GOOGLE_* env vars for
- * another provider's discovery values without changing the verification logic.
+ * Tokens are issued by ./tokens.ts after a Google OIDC login (F7).
  */
 
-const ISSUER = process.env.OIDC_ISSUER ?? "https://accounts.google.com";
-const AUDIENCE = process.env.OIDC_AUDIENCE ?? "";
-const JWKS_URI = process.env.OIDC_JWKS_URI ?? "https://www.googleapis.com/oauth2/v3/certs";
-
-const jwks = createRemoteJWKSet(new URL(JWKS_URI));
-
 export interface AppClaims extends JWTPayload {
-  email?: string;
+  sub: string;
   scope?: string;
-  role?: "viewer" | "operator";
+  role?: Role;
 }
 
 export async function verifyAccessToken(token: string): Promise<AppClaims> {
-  if (!AUDIENCE) {
-    throw new Error("OIDC_AUDIENCE is not configured");
-  }
-  const { payload } = await jwtVerify(token, jwks, {
-    issuer: ISSUER,
-    audience: AUDIENCE,
+  const { verificationKeys } = await getSigningKey();
+  const { payload } = await jwtVerify(token, verificationKeys, {
+    issuer: authConfig.issuer,
+    audience: authConfig.audience,
+    algorithms: ["ES256"],
+    typ: "at+jwt",
+    requiredClaims: ["sub", "exp", "iat"],
   });
+  if (!isRole(payload.role)) {
+    throw new Error("Access token has no valid role claim");
+  }
   return payload as AppClaims;
-}
-
-export function hasScope(claims: AppClaims, required: string): boolean {
-  const scopes = (claims.scope ?? "").split(" ").filter(Boolean);
-  return scopes.includes(required);
 }

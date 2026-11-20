@@ -291,3 +291,56 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Sign-in controls (header, right side) */
+.auth-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.auth-controls__status {
+  opacity: 0.85;
+  font-size: 0.9rem;
+}
+
+.auth-controls__user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.auth-controls__role {
+  background: var(--color-panel);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auth-controls__alert {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-panel);
+  border: 2px solid var(--color-incorrect);
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.auth-controls__dismiss {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}

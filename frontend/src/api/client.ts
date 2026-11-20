@@ -1,6 +1,6 @@
 import type { ApiErrorBody, TriviaQuestion } from "../types/trivia";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 
 export class ApiRequestError extends Error {
   readonly status: number;
@@ -13,7 +13,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-function isApiErrorBody(value: unknown): value is ApiErrorBody {
+export function isApiErrorBody(value: unknown): value is ApiErrorBody {
   if (typeof value !== "object" || value === null) return false;
   const error = (value as Record<string, unknown>).error;
   if (typeof error !== "object" || error === null) return false;
