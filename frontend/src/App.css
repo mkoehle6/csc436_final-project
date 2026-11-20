@@ -1,11 +1,23 @@
+/*
+ * Palette inspired by the show's colors (no purple/violet).
+ * Every text/background pair below meets WCAG AA contrast (D9):
+ *   navy on sky blue ~8:1, navy on yellow ~11:1, navy on white ~15:1,
+ *   white on red-orange ~5.4:1, white on green ~5.1:1, white on navy ~15:1.
+ */
 :root {
-  --color-bg: #6c63d4;
-  --color-panel: #5b53c4;
-  --color-panel-light: #7a72dd;
-  --color-accent-green: #3ddc84;
-  --color-correct: #22c55e;
-  --color-incorrect: #ef4444;
-  --color-text: #ffffff;
+  --color-sky: #70d1fe; /* page background: the opening-credits sky */
+  --color-yellow: #fed90f; /* header band, highlights */
+  --color-yellow-soft: #fff4b8; /* active/hover tint */
+  --color-navy: #10264a; /* text, borders, focus ring */
+  --color-blue-soft: #e3f5ff; /* answer buttons */
+  --color-blue: #1f6fb2; /* hover borders */
+  --color-red-orange: #c8341a; /* buttons, brand accent */
+  --color-red-orange-dark: #a32912;
+  --color-pink: #e2559a; /* donut sprinkle: "answered" marker */
+  --color-white: #ffffff;
+  --color-correct: #2e7d32;
+  --color-incorrect: #c62828;
+  --color-muted: #4a5568; /* secondary text on white (~7.5:1) */
   color-scheme: light;
 }
 
@@ -16,8 +28,14 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--color-sky);
+  color: var(--color-navy);
+}
+
+/* One visible focus style for every interactive element (keyboard-only use, D9). */
+:focus-visible {
+  outline: 3px solid var(--color-navy);
+  outline-offset: 2px;
 }
 
 .app-shell {
@@ -41,16 +59,20 @@ body {
   align-items: center;
   gap: 1.5rem;
   padding: 1rem 2rem;
+  margin-bottom: 1.5rem;
+  background: var(--color-yellow);
+  border-bottom: 4px solid var(--color-navy);
 }
 
 .app-header__brand {
   font-weight: 800;
   font-size: 1.4rem;
   letter-spacing: 0.02em;
+  color: var(--color-navy);
 }
 
 .app-header__brand-accent {
-  color: #ffd43b;
+  color: var(--color-red-orange);
 }
 
 .app-header__search-group {
@@ -62,10 +84,10 @@ body {
 
 .app-header__search,
 .app-header__filter {
-  background: var(--color-panel);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--color-white);
+  border: 2px solid var(--color-navy);
   border-radius: 10px;
-  color: var(--color-text);
+  color: var(--color-navy);
   padding: 0.6rem 1rem;
   font-size: 0.95rem;
 }
@@ -75,7 +97,7 @@ body {
 }
 
 .app-header__search::placeholder {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-muted);
 }
 
 /* Layout */
@@ -91,7 +113,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
 
@@ -106,26 +128,32 @@ body {
 }
 
 .question-list__item {
+  position: relative;
   width: 100%;
   text-align: left;
-  background: var(--color-panel);
+  background: var(--color-white);
   border: 2px solid transparent;
   border-radius: 10px;
   padding: 0.75rem 1rem;
-  color: var(--color-text);
+  color: var(--color-navy);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
 }
 
-.question-list__item--active {
-  background: var(--color-panel-light);
-  border-color: #ffffff55;
+.question-list__item:hover {
+  border-color: var(--color-blue);
 }
 
+.question-list__item--active {
+  background: var(--color-yellow-soft);
+  border-color: var(--color-navy);
+}
+
+/* Answered questions get a sprinkle-pink stripe instead of fading out. */
 .question-list__item--answered {
-  opacity: 0.85;
+  border-left: 6px solid var(--color-pink);
 }
 
 .question-list__label {
@@ -133,7 +161,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  opacity: 0.8;
+  color: var(--color-muted);
 }
 
 .question-list__prompt {
@@ -144,7 +172,7 @@ body {
 }
 
 .question-list__empty {
-  opacity: 0.85;
+  font-weight: 600;
 }
 
 /* Quiz panel */
@@ -155,7 +183,8 @@ body {
 }
 
 .quiz-panel {
-  background: var(--color-panel);
+  background: var(--color-white);
+  border: 3px solid var(--color-navy);
   border-radius: 16px;
   padding: 2rem;
   width: 100%;
@@ -166,12 +195,13 @@ body {
 }
 
 .quiz-panel__prompt {
-  background: var(--color-panel-light);
+  background: var(--color-yellow);
   border-radius: 10px;
   padding: 1rem 1.25rem;
   margin: 0;
   text-align: center;
   font-size: 1.1rem;
+  color: var(--color-navy);
 }
 
 .quiz-panel__image {
@@ -179,14 +209,14 @@ body {
   max-height: 320px;
   object-fit: contain;
   border-radius: 10px;
-  background: #f3f3f3;
+  background: var(--color-blue-soft);
 }
 
 .quiz-panel__image--placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #333;
+  color: var(--color-muted);
   height: 220px;
 }
 
@@ -200,32 +230,41 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-panel-light);
+  background: var(--color-blue-soft);
   border: 2px solid transparent;
   border-radius: 10px;
   padding: 1rem 1.25rem;
-  color: var(--color-text);
+  color: var(--color-navy);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   text-align: left;
 }
 
+.choice-button:hover:not(:disabled) {
+  border-color: var(--color-blue);
+  background: var(--color-yellow-soft);
+}
+
 .choice-button:disabled {
   cursor: default;
 }
 
+/* Feedback is never color-only: the correct answer also gets a ✓ icon. */
 .choice-button--correct {
   border-color: var(--color-correct);
+  border-width: 3px;
 }
 
 .choice-button--incorrect {
   border-color: var(--color-incorrect);
-  opacity: 0.75;
+  border-width: 3px;
+  text-decoration: line-through;
 }
 
 .choice-button__icon {
   background: var(--color-correct);
+  color: var(--color-white);
   border-radius: 999px;
   width: 1.5rem;
   height: 1.5rem;
@@ -237,7 +276,8 @@ body {
 
 /* Status panels (loading / empty / error) */
 .status-panel {
-  background: var(--color-panel);
+  background: var(--color-white);
+  border: 2px solid var(--color-navy);
   border-radius: 12px;
   padding: 2rem;
   text-align: center;
@@ -249,29 +289,38 @@ body {
 }
 
 .status-panel--error {
-  border: 2px solid var(--color-incorrect);
+  border: 3px solid var(--color-incorrect);
 }
 
 .status-panel__detail {
   font-size: 0.85rem;
-  opacity: 0.85;
+  color: var(--color-muted);
 }
 
 .btn-secondary {
-  background: var(--color-accent-green);
+  background: var(--color-red-orange);
   border: none;
   border-radius: 8px;
   padding: 0.5rem 1.25rem;
   font-weight: 700;
-  color: #0a2e1a;
+  color: var(--color-white);
   cursor: pointer;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-red-orange-dark);
+}
+
+.btn-secondary:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 .spinner {
   width: 32px;
   height: 32px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #ffffff;
+  border: 4px solid var(--color-blue-soft);
+  border-top-color: var(--color-navy);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -282,7 +331,17 @@ body {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 @media (max-width: 768px) {
+  .app-header {
+    flex-wrap: wrap;
+  }
+
   .app-main {
     grid-template-columns: 1fr;
   }
@@ -303,8 +362,8 @@ body {
 }
 
 .auth-controls__status {
-  opacity: 0.85;
   font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .auth-controls__user {
@@ -315,7 +374,8 @@ body {
 }
 
 .auth-controls__role {
-  background: var(--color-panel);
+  background: var(--color-navy);
+  color: var(--color-white);
   border-radius: 999px;
   padding: 0.15rem 0.6rem;
   font-size: 0.75rem;
@@ -329,7 +389,8 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--color-panel);
+  background: var(--color-white);
+  color: var(--color-navy);
   border: 2px solid var(--color-incorrect);
   border-radius: 8px;
   padding: 0.35rem 0.75rem;
@@ -339,7 +400,7 @@ body {
 .auth-controls__dismiss {
   background: none;
   border: none;
-  color: var(--color-text);
+  color: var(--color-navy);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 0 0.25rem;
