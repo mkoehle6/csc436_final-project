@@ -106,10 +106,16 @@ npm run dev             # http://localhost:5173
 
 ## Tests
 
+One command, from the repo root, runs every workspace's tests:
+
 ```powershell
-cd backend
 npm test
 ```
+
+CI (`.github/workflows/ci.yml`) runs on every push and pull request:
+`npm ci`, `npm run validate:render` (render.yaml against Render's schema),
+`npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. Staging on
+Render deploys only after these checks pass.
 
 Covers: input validation (400), anonymous write rejection (401), viewer
 write rejection (403), the core scoring calculation
