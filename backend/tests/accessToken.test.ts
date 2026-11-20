@@ -1,6 +1,6 @@
 import { generateKeyPair, SignJWT } from "jose";
 import request from "supertest";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { freshAppWithDb, TEST_AUDIENCE, TEST_ISSUER, TEST_KID, useTestSigningKey } from "./helpers.js";
 
 /**
@@ -46,9 +46,15 @@ const postQuestion = async (bearer: string) =>
   request(app).post("/api/questions").set("Authorization", `Bearer ${bearer}`).send({});
 
 describe("access-token validation (F8)", () => {
+  let closeDb: () => Promise<void>;
+
   beforeAll(async () => {
     signingKey = await useTestSigningKey();
-    ({ app } = await freshAppWithDb());
+    ({ app, close: closeDb } = await freshAppWithDb());
+  });
+
+  afterAll(async () => {
+    await closeDb();
   });
 
   it("control: a token passing every check reaches body validation (400)", async () => {

@@ -15,15 +15,17 @@ export async function useTestSigningKey() {
   return privateKey;
 }
 
-/** Fresh module graph + fresh in-memory database with all migrations applied. */
+/**
+ * Fresh module graph + fresh in-memory PostgreSQL (PGlite) with all migrations
+ * applied. Call `close()` when done so the embedded database is released.
+ */
 export async function freshAppWithDb() {
   process.env.DATABASE_URL = ":memory:";
   vi.resetModules();
-  const { db, sqlite } = await import("../src/db/client.js");
-  const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
-  migrate(db, { migrationsFolder: "./src/db/migrations" });
+  const { db, runMigrations, closeDb } = await import("../src/db/client.js");
+  await runMigrations();
   const { createApp } = await import("../src/app.js");
-  return { app: createApp(), db, sqlite };
+  return { app: createApp(), db, close: closeDb };
 }
 
 /** Pulls `name=value` out of a supertest response's Set-Cookie headers. */

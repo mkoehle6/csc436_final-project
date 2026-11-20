@@ -1,7 +1,7 @@
 import "../env.js"; // must stay first
 import { eq } from "drizzle-orm";
 import { isRole } from "../auth/scopes.js";
-import { db, sqlite } from "../db/client.js";
+import { closeDb, db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { recordAudit } from "../lib/audit.js";
 
@@ -41,4 +41,4 @@ if (user.role === role) {
   });
   console.log(`User ${user.id}: ${user.role} -> ${role}.`);
 }
-sqlite.close();
+await closeDb();

@@ -1,14 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
-import type Database from "better-sqlite3";
+import { sql } from "drizzle-orm";
+import type { Db } from "./client.js";
 
 /**
  * Rolls back the most recently applied migration (F5).
  *
  * Drizzle's migrator only knows how to go forward, so each reversible migration
  * has a hand-written `src/db/migrations-down/<tag>.down.sql`. This applies that
- * file and removes the migration's row from `__drizzle_migrations` in a single
- * transaction, so a later `npm run db:migrate` re-applies it cleanly.
+ * file and removes the migration's row from `drizzle.__drizzle_migrations` in a
+ * single transaction (PostgreSQL DDL is transactional, so a failure changes
+ * nothing), and a later `npm run db:migrate` re-applies it cleanly.
  */
 
 interface JournalEntry {
@@ -20,21 +22,24 @@ interface JournalEntry {
 const MIGRATIONS_DIR = path.resolve("src/db/migrations");
 const DOWN_DIR = path.resolve("src/db/migrations-down");
 
-export function rollbackLatest(sqlite: Database.Database): string {
+export async function rollbackLatest(db: Db): Promise<string> {
   const journal = JSON.parse(
     fs.readFileSync(path.join(MIGRATIONS_DIR, "meta/_journal.json"), "utf8"),
   ) as { entries: JournalEntry[] };
 
-  const applied = sqlite
-    .prepare("SELECT created_at AS createdAt FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1")
-    .get() as { createdAt: number } | undefined;
-  if (!applied) {
+  const { rows } = await db.execute<{ created_at: string | number }>(
+    sql`SELECT created_at FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1`,
+  );
+  const latest = rows[0];
+  if (!latest) {
     throw new Error("No applied migrations to roll back.");
   }
+  // bigint arrives as a string from node-postgres and as a number from PGlite.
+  const appliedAt = Number(latest.created_at);
 
-  const entry = journal.entries.find((e) => e.when === Number(applied.createdAt));
+  const entry = journal.entries.find((e) => e.when === appliedAt);
   if (!entry) {
-    throw new Error(`Applied migration (created_at=${applied.createdAt}) is not in the journal.`);
+    throw new Error(`Applied migration (created_at=${appliedAt}) is not in the journal.`);
   }
 
   const downFile = path.join(DOWN_DIR, `${entry.tag}.down.sql`);
@@ -48,10 +53,12 @@ export function rollbackLatest(sqlite: Database.Database): string {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  sqlite.transaction(() => {
-    for (const statement of statements) sqlite.exec(statement);
-    sqlite.prepare("DELETE FROM __drizzle_migrations WHERE created_at = ?").run(entry.when);
-  })();
+  await db.transaction(async (tx) => {
+    for (const statement of statements) {
+      await tx.execute(sql.raw(statement));
+    }
+    await tx.execute(sql`DELETE FROM drizzle.__drizzle_migrations WHERE created_at = ${entry.when}`);
+  });
 
   return entry.tag;
 }
@@ -59,8 +66,8 @@ export function rollbackLatest(sqlite: Database.Database): string {
 // CLI entry point: `npm run db:rollback`
 if (process.argv[1] && path.resolve(process.argv[1]).endsWith(path.join("db", "migrateDown.ts"))) {
   await import("../env.js");
-  const { sqlite } = await import("./client.js");
-  const tag = rollbackLatest(sqlite);
+  const { db, closeDb } = await import("./client.js");
+  const tag = await rollbackLatest(db);
   console.log(`Rolled back ${tag}.`);
-  sqlite.close();
+  await closeDb();
 }

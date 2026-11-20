@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import request from "supertest";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { freshAppWithDb, getCookie, useTestSigningKey } from "./helpers.js";
 
 /**
@@ -24,7 +25,8 @@ let expected: { codeChallenge: string; nonce: string } | null = null;
 let nonceOverride: string | null = null;
 
 let app: Awaited<ReturnType<typeof freshAppWithDb>>["app"];
-let sqlite: Awaited<ReturnType<typeof freshAppWithDb>>["sqlite"];
+let db: Awaited<ReturnType<typeof freshAppWithDb>>["db"];
+let closeDb: Awaited<ReturnType<typeof freshAppWithDb>>["close"];
 
 async function startGoogleStub() {
   const { publicKey, privateKey } = await generateKeyPair("RS256");
@@ -103,9 +105,13 @@ describe("Google login flow (F7)", () => {
   });
 
   beforeEach(async () => {
-    ({ app, sqlite } = await freshAppWithDb());
+    ({ app, db, close: closeDb } = await freshAppWithDb());
     expected = null;
     nonceOverride = null;
+  });
+
+  afterEach(async () => {
+    await closeDb();
   });
 
   afterAll(async () => {
@@ -153,9 +159,9 @@ describe("Google login flow (F7)", () => {
     const write = await request(app).post("/api/questions").set("Authorization", bearer).send({});
     expect(write.status).toBe(403);
 
-    const audit = sqlite
-      .prepare("SELECT actor_user_id AS actor, action FROM audit_log ORDER BY id")
-      .all() as Array<{ actor: number; action: string }>;
+    const { rows: audit } = await db.execute<{ actor: number; action: string }>(
+      sql`SELECT actor_user_id AS actor, action FROM audit_log ORDER BY id`,
+    );
     expect(audit).toEqual([
       { actor: 1, action: "user.create" },
       { actor: 1, action: "auth.login" },

@@ -1,7 +1,6 @@
 import "../env.js"; // must stay first: loads .env before db/client.js reads DATABASE_URL
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { db, sqlite } from "./client.js";
+import { closeDb, driver, runMigrations } from "./client.js";
 
-migrate(db, { migrationsFolder: "./src/db/migrations" });
-console.log("Migrations applied.");
-sqlite.close();
+await runMigrations();
+console.log(`Migrations applied (${driver}).`);
+await closeDb();

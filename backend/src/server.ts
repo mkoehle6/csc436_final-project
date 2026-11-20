@@ -1,6 +1,6 @@
 import "./env.js"; // must stay first: loads .env before any module reads process.env
 import { createApp } from "./app.js";
-import { sqlite } from "./db/client.js";
+import { closeDb } from "./db/client.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const app = createApp();
@@ -10,11 +10,12 @@ const server = app.listen(port, () => {
 });
 
 /**
- * Graceful shutdown for Ctrl+C, `tsx watch` restarts and platform stop signals.
- * Closing the database explicitly before exiting matters: letting the process
- * exit with better-sqlite3 still open crashed Node 24 on Windows with
- * "RemoveEnvironmentCleanupHook ... Assertion failed: (env) != nullptr".
- * Closing the HTTP server first also frees the port before a restart rebinds it.
+ * Graceful shutdown for Ctrl+C, `tsx watch` restarts and platform stop signals
+ * (Render sends SIGTERM before replacing an instance during a deploy).
+ * Closing the HTTP server first frees the port before a restart rebinds it and
+ * lets in-flight requests finish; then the database pool / embedded PGlite is
+ * closed so no connection or write is cut off mid-way. (An earlier SQLite build
+ * crashed Node 24 on Windows when exiting with the database still open.)
  */
 let shuttingDown = false;
 function shutdown(signal: string) {
@@ -27,8 +28,9 @@ function shutdown(signal: string) {
   forceExit.unref();
 
   server.close(() => {
-    sqlite.close();
-    process.exit(0);
+    closeDb()
+      .catch((err: unknown) => console.error("error closing database", err))
+      .finally(() => process.exit(0));
   });
   server.closeIdleConnections();
 }

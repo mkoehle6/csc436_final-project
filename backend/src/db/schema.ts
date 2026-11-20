@@ -1,31 +1,35 @@
-import { sql } from "drizzle-orm";
-import {
-  integer,
-  sqliteTable,
-  text,
-  index,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+
+/**
+ * PostgreSQL schema (F4). Every table has a primary key; foreign keys are
+ * declared below; each index carries a comment justifying the query it serves.
+ *
+ * Timestamps are `timestamptz` so values are unambiguous across servers and
+ * time zones; Drizzle maps them to JS Date objects.
+ */
+
+const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+
+/** Enforced by the database, not just the app: an invalid role cannot be stored. */
+export const userRole = pgEnum("user_role", ["viewer", "operator"]);
+export const questionCategory = pgEnum("question_category", ["character", "episode", "location"]);
 
 /**
  * Users are provisioned from validated OIDC claims (sub/email) on first login.
  * `role` drives server-side authorization (F9): "viewer" can play/read, "operator" can
  * manage the question bank (write endpoints).
  */
-export const users = sqliteTable(
+export const users = pgTable(
   "users",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     oidcSubject: text("oidc_subject").notNull(),
     email: text("email").notNull(),
     displayName: text("display_name"),
-    role: text("role", { enum: ["viewer", "operator"] })
-      .notNull()
-      .default("viewer"),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+    role: userRole("role").notNull().default("viewer"),
+    createdAt: createdAt(),
   },
+  // Every login looks the user up by Google subject; unique also prevents duplicate accounts.
   (table) => [uniqueIndex("users_oidc_subject_idx").on(table.oidcSubject)],
 );
 
@@ -33,52 +37,48 @@ export const users = sqliteTable(
  * Trivia questions, generated from The Simpsons API data and cached so gameplay
  * does not depend on the third-party API being up at question time.
  */
-export const questions = sqliteTable(
+export const questions = pgTable(
   "questions",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     prompt: text("prompt").notNull(),
-    category: text("category", {
-      enum: ["character", "episode", "location"],
-    }).notNull(),
+    category: questionCategory("category").notNull(),
     correctAnswer: text("correct_answer").notNull(),
-    // JSON-encoded string[] of 4 choices including the correct answer.
-    choices: text("choices", { mode: "json" }).$type<string[]>().notNull(),
+    // string[] of 4 choices including the correct answer.
+    choices: jsonb("choices").$type<string[]>().notNull(),
     imagePath: text("image_path"),
     sourceEntityId: integer("source_entity_id").notNull(),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+    createdAt: createdAt(),
   },
+  // The category filter selects questions by category.
   (table) => [index("questions_category_idx").on(table.category)],
 );
 
 /**
  * One row per trivia playthrough, owned by the authenticated user.
  */
-export const gameSessions = sqliteTable(
+export const gameSessions = pgTable(
   "game_sessions",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     userId: integer("user_id")
       .notNull()
       .references(() => users.id),
-    startedAt: text("started_at")
-      .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
-    completedAt: text("completed_at"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     score: integer("score").notNull().default(0),
   },
+  // "My sessions" and the leaderboard group sessions by user.
   (table) => [index("game_sessions_user_id_idx").on(table.userId)],
 );
 
 /**
  * One row per answered question within a session; used to compute score (core calculation, Q1).
  */
-export const answers = sqliteTable(
+export const answers = pgTable(
   "answers",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     sessionId: integer("session_id")
       .notNull()
       .references(() => gameSessions.id),
@@ -86,11 +86,10 @@ export const answers = sqliteTable(
       .notNull()
       .references(() => questions.id),
     selectedAnswer: text("selected_answer").notNull(),
-    isCorrect: integer("is_correct", { mode: "boolean" }).notNull(),
-    answeredAt: text("answered_at")
-      .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+    isCorrect: boolean("is_correct").notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }).notNull().defaultNow(),
   },
+  // Scoring reads every answer of one session.
   (table) => [index("answers_session_id_idx").on(table.sessionId)],
 );
 
@@ -101,14 +100,12 @@ export const answers = sqliteTable(
  * row it consumes, and expired rows are swept on each new login.
  * Keyed by `state` because that is exactly what the callback looks up.
  */
-export const oauthLoginStates = sqliteTable("oauth_login_states", {
+export const oauthLoginStates = pgTable("oauth_login_states", {
   state: text("state").primaryKey(),
   nonce: text("nonce").notNull(),
   codeVerifier: text("code_verifier").notNull(),
-  expiresAt: text("expires_at").notNull(),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: createdAt(),
 });
 
 /**
@@ -116,19 +113,17 @@ export const oauthLoginStates = sqliteTable("oauth_login_states", {
  * SHA-256 hash of the cookie value is stored, so a database leak does not
  * leak usable sessions. `revoked_at` is set on logout instead of deleting.
  */
-export const authSessions = sqliteTable(
+export const authSessions = pgTable(
   "auth_sessions",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     tokenHash: text("token_hash").notNull(),
     userId: integer("user_id")
       .notNull()
       .references(() => users.id),
-    expiresAt: text("expires_at").notNull(),
-    revokedAt: text("revoked_at"),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: createdAt(),
   },
   (table) => [
     // Every /auth/token call looks a session up by the hash of its cookie.
@@ -141,19 +136,18 @@ export const authSessions = sqliteTable(
  * Append-only audit trail (F6): who (actor from validated token), what (action +
  * entity), when, and before/after state as JSON snapshots.
  */
-export const auditLog = sqliteTable(
+export const auditLog = pgTable(
   "audit_log",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     actorUserId: integer("actor_user_id").references(() => users.id),
     action: text("action").notNull(),
     entityType: text("entity_type").notNull(),
     entityId: integer("entity_id"),
-    before: text("before", { mode: "json" }),
-    after: text("after", { mode: "json" }),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`),
+    before: jsonb("before"),
+    after: jsonb("after"),
+    createdAt: createdAt(),
   },
+  // "History of this entity" queries filter by type + id.
   (table) => [index("audit_log_entity_idx").on(table.entityType, table.entityId)],
 );

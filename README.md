@@ -9,7 +9,7 @@ application requirements checklist (F1–F13, D1–D11, S1–S2, Q1–Q4).
 
 ```
 frontend/     React + TypeScript (Vite) client — the TriviaNerd UI
-backend/      Express + TypeScript REST API, SQLite + Drizzle ORM, OIDC auth
+backend/      Express + TypeScript REST API, PostgreSQL + Drizzle ORM, OIDC auth
 mcp-server/   MCP server (read/write tools, OAuth-protected) — planned
 mcp-app/      Interactive MCP App (React/TS) — planned
 infra/        Deployment config / IaC — planned
@@ -52,11 +52,16 @@ npm run dev             # http://localhost:5173
   `GET /api/sessions/:id`.
 - **Error shape:** every failure returns
   `{ "error": { "code": "...", "message": "...", "details"?: ... } }`.
-- **Database:** SQLite via Drizzle ORM (`backend/src/db/schema.ts`), with
-  versioned migrations in `backend/src/db/migrations/`. Primary keys on every
-  table, foreign keys (`answers.session_id → game_sessions.id`,
+- **Database:** PostgreSQL via Drizzle ORM (`backend/src/db/schema.ts`), with
+  versioned migrations in `backend/src/db/migrations/`. `DATABASE_URL` picks the
+  engine (`backend/src/db/client.ts`): a `postgresql://` URL uses a real server
+  (Render Postgres in staging/production); a directory path such as
+  `./data/pglite` runs embedded PostgreSQL (PGlite) for local development, and
+  tests use in-memory PGlite, so no local Postgres install is needed. Primary
+  keys on every table, foreign keys (`answers.session_id → game_sessions.id`,
   `answers.question_id → questions.id`, `game_sessions.user_id → users.id`,
-  `audit_log.actor_user_id → users.id`), and indexes justified per table (see
+  `auth_sessions.user_id → users.id`, `audit_log.actor_user_id → users.id`),
+  enum types for role and category, and indexes justified per table (see
   comments in `schema.ts`, e.g. `questions_category_idx` for category
   filtering, `answers_session_id_idx` for scoring lookups).
 - **Audit trail:** append-only `audit_log` table, written by
@@ -116,7 +121,7 @@ retry/timeout/malformed-response handling with no real network call).
 
 This is an in-progress build toward the full requirements checklist. Done so
 far: F1 (frontend scaffold + strict TS), F2 (loading/empty/error states),
-F3 (REST API + error shape + status codes), F4 (persistent SQLite storage
+F3 (REST API + error shape + status codes), F4 (persistent PostgreSQL storage
 with PK/FK/index), F5 (versioned migrations), F6 (audit trail), the server
 side of F7/F8/F9 (OIDC verification + roles, pending a real provider wire-up
 on the frontend), F10 (Simpsons API integration with timeout/retry/cache/

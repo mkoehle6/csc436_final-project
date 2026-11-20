@@ -9,13 +9,12 @@ import { pkceChallenge, randomToken, type GoogleIdentity } from "./google.js";
 /** Database side of the login flow: one-time login states, users and refresh sessions. */
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
-const isoIn = (ms: number) => new Date(Date.now() + ms).toISOString();
+const fromNow = (ms: number) => new Date(Date.now() + ms);
 
 /** Starts a login: stores state/nonce/PKCE verifier and returns what the redirect needs. */
 export async function createLoginState() {
-  const now = new Date().toISOString();
   // Sweep abandoned logins so this table cannot grow without bound.
-  await db.delete(oauthLoginStates).where(lt(oauthLoginStates.expiresAt, now));
+  await db.delete(oauthLoginStates).where(lt(oauthLoginStates.expiresAt, new Date()));
 
   const state = randomToken();
   const nonce = randomToken();
@@ -24,7 +23,7 @@ export async function createLoginState() {
     state,
     nonce,
     codeVerifier,
-    expiresAt: isoIn(authConfig.loginStateTtlMs),
+    expiresAt: fromNow(authConfig.loginStateTtlMs),
   });
   return { state, nonce, codeChallenge: pkceChallenge(codeVerifier) };
 }
@@ -32,7 +31,7 @@ export async function createLoginState() {
 /** Single-use: deletes the row and returns it only if it has not expired. */
 export async function consumeLoginState(state: string) {
   const [row] = await db.delete(oauthLoginStates).where(eq(oauthLoginStates.state, state)).returning();
-  if (!row || row.expiresAt < new Date().toISOString()) return null;
+  if (!row || row.expiresAt.getTime() < Date.now()) return null;
   return { nonce: row.nonce, codeVerifier: row.codeVerifier };
 }
 
@@ -70,7 +69,7 @@ export async function upsertUser(identity: GoogleIdentity) {
 /** Creates a refresh session; returns the raw cookie value (only its hash is stored). */
 export async function createSession(userId: number) {
   const token = randomToken();
-  const expiresAt = isoIn(authConfig.sessionTtlMs);
+  const expiresAt = fromNow(authConfig.sessionTtlMs);
   const [session] = await db
     .insert(authSessions)
     .values({ tokenHash: hash(token), userId, expiresAt })
@@ -88,7 +87,7 @@ export async function findActiveSession(token: string) {
       and(
         eq(authSessions.tokenHash, hash(token)),
         isNull(authSessions.revokedAt),
-        gt(authSessions.expiresAt, new Date().toISOString()),
+        gt(authSessions.expiresAt, new Date()),
       ),
     )
     .limit(1);
@@ -98,7 +97,7 @@ export async function findActiveSession(token: string) {
 export async function revokeSession(token: string) {
   const [row] = await db
     .update(authSessions)
-    .set({ revokedAt: new Date().toISOString() })
+    .set({ revokedAt: new Date() })
     .where(and(eq(authSessions.tokenHash, hash(token)), isNull(authSessions.revokedAt)))
     .returning();
   return row ?? null;
