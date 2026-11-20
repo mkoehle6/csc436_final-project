@@ -9,10 +9,16 @@
 #                                           (autoDeployTrigger: off), so every
 #                                           change reaches production through staging.
 #
-# Values marked `sync: false` are entered in the Render dashboard when the
-# Blueprint is first created and are never stored in this file. Some of them
-# (URLs, origins) are not secret; they move into this file as plain values once
-# the custom domain is chosen (see TODO(domain) notes).
+# Values marked `sync: false` are secrets, entered in the Render dashboard when
+# the Blueprint is first created and never stored in this file.
+#
+# Hostnames (DNS hosted on Cloudflare; registrar Porkbun). Frontend and backend
+# share the registrable domain burnscodev.com, so the SameSite=Lax session
+# cookie is sent on the frontend's calls to the backend:
+#
+#                 frontend                          backend
+#   production    trivia.burnscodev.com             trivia-api.burnscodev.com
+#   staging       trivia-staging.burnscodev.com     trivia-staging-api.burnscodev.com
 
 projects:
   - name: trivianerd
@@ -49,11 +55,17 @@ projects:
             # They are idempotent: already-applied migrations are skipped.
             startCommand: cd backend && npm run start:migrate && npm start
             healthCheckPath: /healthz
+            domains:
+              - trivia-staging-api.burnscodev.com
             envVars:
               - key: NODE_VERSION
                 value: "24"
+              # Proxy hops in front of the app. "1" = Render's load balancer. Raise to
+              # "2" only when Cloudflare proxying is on AND the onrender.com subdomain
+              # is disabled; otherwise a client could reach Render directly and spoof
+              # X-Forwarded-For past the rate limiter.
               - key: TRUST_PROXY
-                value: "1" # Render's load balancer; becomes 2 once a CDN is in front
+                value: "1"
               - key: AUTH_AUDIENCE
                 value: trivianerd-api
               - key: SIMPSONS_API_BASE_URL
@@ -62,18 +74,14 @@ projects:
                 fromDatabase:
                   name: trivianerd-db-staging
                   property: connectionString
-              # TODO(domain): plain values once the domain exists, e.g.
-              #   AUTH_ISSUER=https://api.staging.<domain>
-              #   APP_BASE_URL / CORS_ALLOWED_ORIGINS=https://staging.<domain>
-              #   GOOGLE_REDIRECT_URI=https://api.staging.<domain>/auth/callback
               - key: AUTH_ISSUER
-                sync: false
+                value: https://trivia-staging-api.burnscodev.com
               - key: APP_BASE_URL
-                sync: false
+                value: https://trivia-staging.burnscodev.com
               - key: CORS_ALLOWED_ORIGINS
-                sync: false
+                value: https://trivia-staging.burnscodev.com
               - key: GOOGLE_REDIRECT_URI
-                sync: false
+                value: https://trivia-staging-api.burnscodev.com/auth/callback
               # Secrets: staging has its own Google OAuth client and signing key.
               - key: GOOGLE_CLIENT_ID
                 sync: false
@@ -91,12 +99,14 @@ projects:
               paths: ["frontend/**", "package.json", "package-lock.json", "render.yaml"]
             buildCommand: npm ci --workspace=frontend && npm run build --workspace=frontend
             staticPublishPath: frontend/dist
+            domains:
+              - trivia-staging.burnscodev.com
             envVars:
               - key: NODE_VERSION
                 value: "24"
-              # TODO(domain): https://api.staging.<domain> (baked into the bundle at build time)
+              # Baked into the JS bundle at build time.
               - key: VITE_API_BASE_URL
-                sync: false
+                value: https://trivia-staging-api.burnscodev.com
             headers:
               # D6 cache policy per content class.
               # Hashed assets (/assets/index-<hash>.js) never change under the same name.
@@ -110,11 +120,10 @@ projects:
               - path: /index.html
                 name: Cache-Control
                 value: no-cache
-              # D7 security headers.
-              # TODO(domain): narrow connect-src from `https:` to the API origin.
+              # D7 security headers. connect-src allows only this environment's API.
               - path: /*
                 name: Content-Security-Policy
-                value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+                value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self' https://trivia-staging-api.burnscodev.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
               - path: /*
                 name: Strict-Transport-Security
                 value: max-age=31536000; includeSubDomains
@@ -158,11 +167,13 @@ projects:
             preDeployCommand: cd backend && npm run start:migrate
             startCommand: cd backend && npm start
             healthCheckPath: /healthz
+            domains:
+              - trivia-api.burnscodev.com
             envVars:
               - key: NODE_VERSION
                 value: "24"
               - key: TRUST_PROXY
-                value: "1"
+                value: "1" # see the staging note before changing
               - key: AUTH_AUDIENCE
                 value: trivianerd-api
               - key: SIMPSONS_API_BASE_URL
@@ -171,16 +182,14 @@ projects:
                 fromDatabase:
                   name: trivianerd-db-prod
                   property: connectionString
-              # TODO(domain): AUTH_ISSUER=https://api.<domain>, APP_BASE_URL and
-              # CORS_ALLOWED_ORIGINS=https://<domain>, GOOGLE_REDIRECT_URI=https://api.<domain>/auth/callback
               - key: AUTH_ISSUER
-                sync: false
+                value: https://trivia-api.burnscodev.com
               - key: APP_BASE_URL
-                sync: false
+                value: https://trivia.burnscodev.com
               - key: CORS_ALLOWED_ORIGINS
-                sync: false
+                value: https://trivia.burnscodev.com
               - key: GOOGLE_REDIRECT_URI
-                sync: false
+                value: https://trivia-api.burnscodev.com/auth/callback
               # Secrets: a different Google OAuth client and signing key than staging.
               - key: GOOGLE_CLIENT_ID
                 sync: false
@@ -196,12 +205,13 @@ projects:
             autoDeployTrigger: off
             buildCommand: npm ci --workspace=frontend && npm run build --workspace=frontend
             staticPublishPath: frontend/dist
+            domains:
+              - trivia.burnscodev.com
             envVars:
               - key: NODE_VERSION
                 value: "24"
-              # TODO(domain): https://api.<domain>
               - key: VITE_API_BASE_URL
-                sync: false
+                value: https://trivia-api.burnscodev.com
             headers:
               # D6 cache policy per content class.
               # Hashed assets (/assets/index-<hash>.js) never change under the same name.
@@ -215,11 +225,10 @@ projects:
               - path: /index.html
                 name: Cache-Control
                 value: no-cache
-              # D7 security headers.
-              # TODO(domain): narrow connect-src from `https:` to the API origin.
+              # D7 security headers. connect-src allows only this environment's API.
               - path: /*
                 name: Content-Security-Policy
-                value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+                value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self' https://trivia-api.burnscodev.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
               - path: /*
                 name: Strict-Transport-Security
                 value: max-age=31536000; includeSubDomains
