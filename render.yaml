@@ -1,0 +1,237 @@
+# Render Blueprint for TriviaNerd (D5: infrastructure as code).
+# Schema: https://render.com/schema/render.yaml.json  ·  Docs: https://render.com/docs/blueprint-spec
+#
+# One project, two environments (D3): staging and production each get their own
+# database, backend and frontend, with separate data and separate secrets.
+#
+#   push to main ──▶ CI (GitHub checks) ──▶ staging auto-deploys when checks pass
+#                                           production deploys only when promoted
+#                                           (autoDeployTrigger: off), so every
+#                                           change reaches production through staging.
+#
+# Values marked `sync: false` are entered in the Render dashboard when the
+# Blueprint is first created and are never stored in this file. Some of them
+# (URLs, origins) are not secret; they move into this file as plain values once
+# the custom domain is chosen (see TODO(domain) notes).
+
+projects:
+  - name: trivianerd
+    environments:
+      # ─────────────────────────────── STAGING ───────────────────────────────
+      - name: staging
+        databases:
+          - name: trivianerd-db-staging
+            region: oregon
+            # Free Render Postgres: one per workspace, expires 30 days after creation
+            # (recreate it from this Blueprint; see the runbook). Swap for 0.1c-256mb
+            # if staging needs to outlive that.
+            plan: free
+            # Same major version as PGlite, which local dev and the tests run on.
+            postgresMajorVersion: "17"
+            databaseName: trivianerd
+            user: trivianerd
+            # Empty allow list = no access from the internet; only services on
+            # Render's private network (the backend) can connect.
+            ipAllowList: []
+
+        services:
+          - type: web
+            name: trivianerd-api-staging
+            runtime: node
+            region: oregon
+            plan: free # sleeps after 15 min idle; acceptable for staging only
+            branch: main
+            autoDeployTrigger: checksPass
+            buildFilter:
+              paths: ["backend/**", "package.json", "package-lock.json", "render.yaml"]
+            buildCommand: npm ci --workspace=backend && npm run build --workspace=backend
+            # Free instances cannot use preDeployCommand, so migrations run at start.
+            # They are idempotent: already-applied migrations are skipped.
+            startCommand: cd backend && npm run start:migrate && npm start
+            healthCheckPath: /healthz
+            envVars:
+              - key: NODE_VERSION
+                value: "24"
+              - key: TRUST_PROXY
+                value: "1" # Render's load balancer; becomes 2 once a CDN is in front
+              - key: AUTH_AUDIENCE
+                value: trivianerd-api
+              - key: SIMPSONS_API_BASE_URL
+                value: https://thesimpsonsapi.com/api
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: trivianerd-db-staging
+                  property: connectionString
+              # TODO(domain): plain values once the domain exists, e.g.
+              #   AUTH_ISSUER=https://api.staging.<domain>
+              #   APP_BASE_URL / CORS_ALLOWED_ORIGINS=https://staging.<domain>
+              #   GOOGLE_REDIRECT_URI=https://api.staging.<domain>/auth/callback
+              - key: AUTH_ISSUER
+                sync: false
+              - key: APP_BASE_URL
+                sync: false
+              - key: CORS_ALLOWED_ORIGINS
+                sync: false
+              - key: GOOGLE_REDIRECT_URI
+                sync: false
+              # Secrets: staging has its own Google OAuth client and signing key.
+              - key: GOOGLE_CLIENT_ID
+                sync: false
+              - key: GOOGLE_CLIENT_SECRET
+                sync: false
+              - key: AUTH_PRIVATE_JWK
+                sync: false
+
+          - type: web
+            name: trivianerd-web-staging
+            runtime: static
+            branch: main
+            autoDeployTrigger: checksPass
+            buildFilter:
+              paths: ["frontend/**", "package.json", "package-lock.json", "render.yaml"]
+            buildCommand: npm ci --workspace=frontend && npm run build --workspace=frontend
+            staticPublishPath: frontend/dist
+            envVars:
+              - key: NODE_VERSION
+                value: "24"
+              # TODO(domain): https://api.staging.<domain> (baked into the bundle at build time)
+              - key: VITE_API_BASE_URL
+                sync: false
+            headers:
+              # D6 cache policy per content class.
+              # Hashed assets (/assets/index-<hash>.js) never change under the same name.
+              - path: /assets/*
+                name: Cache-Control
+                value: public, max-age=31536000, immutable
+              # HTML must be revalidated so a deploy is picked up immediately.
+              - path: /
+                name: Cache-Control
+                value: no-cache
+              - path: /index.html
+                name: Cache-Control
+                value: no-cache
+              # D7 security headers.
+              # TODO(domain): narrow connect-src from `https:` to the API origin.
+              - path: /*
+                name: Content-Security-Policy
+                value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+              - path: /*
+                name: Strict-Transport-Security
+                value: max-age=31536000; includeSubDomains
+              - path: /*
+                name: X-Content-Type-Options
+                value: nosniff
+              - path: /*
+                name: Referrer-Policy
+                value: strict-origin-when-cross-origin
+              - path: /*
+                name: X-Frame-Options
+                value: DENY
+              - path: /*
+                name: Permissions-Policy
+                value: camera=(), microphone=(), geolocation=()
+
+      # ────────────────────────────── PRODUCTION ─────────────────────────────
+      - name: production
+        permissions:
+          protection: enabled # blocks destructive actions on production resources
+        databases:
+          - name: trivianerd-db-prod
+            region: oregon
+            plan: 0.1c-256mb # cheapest paid: never expires, daily backups
+            postgresMajorVersion: "17"
+            databaseName: trivianerd
+            user: trivianerd
+            ipAllowList: []
+
+        services:
+          - type: web
+            name: trivianerd-api-prod
+            runtime: node
+            region: oregon
+            plan: 0.5c-512mb # cheapest paid: no sleeping, so the SLO is meaningful
+            branch: main
+            autoDeployTrigger: off # promoted from staging only
+            buildCommand: npm ci --workspace=backend && npm run build --workspace=backend
+            # Paid instances run migrations on a separate instance *before* traffic
+            # moves: a failing migration fails the deploy and the old version keeps serving.
+            preDeployCommand: cd backend && npm run start:migrate
+            startCommand: cd backend && npm start
+            healthCheckPath: /healthz
+            envVars:
+              - key: NODE_VERSION
+                value: "24"
+              - key: TRUST_PROXY
+                value: "1"
+              - key: AUTH_AUDIENCE
+                value: trivianerd-api
+              - key: SIMPSONS_API_BASE_URL
+                value: https://thesimpsonsapi.com/api
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: trivianerd-db-prod
+                  property: connectionString
+              # TODO(domain): AUTH_ISSUER=https://api.<domain>, APP_BASE_URL and
+              # CORS_ALLOWED_ORIGINS=https://<domain>, GOOGLE_REDIRECT_URI=https://api.<domain>/auth/callback
+              - key: AUTH_ISSUER
+                sync: false
+              - key: APP_BASE_URL
+                sync: false
+              - key: CORS_ALLOWED_ORIGINS
+                sync: false
+              - key: GOOGLE_REDIRECT_URI
+                sync: false
+              # Secrets: a different Google OAuth client and signing key than staging.
+              - key: GOOGLE_CLIENT_ID
+                sync: false
+              - key: GOOGLE_CLIENT_SECRET
+                sync: false
+              - key: AUTH_PRIVATE_JWK
+                sync: false
+
+          - type: web
+            name: trivianerd-web-prod
+            runtime: static
+            branch: main
+            autoDeployTrigger: off
+            buildCommand: npm ci --workspace=frontend && npm run build --workspace=frontend
+            staticPublishPath: frontend/dist
+            envVars:
+              - key: NODE_VERSION
+                value: "24"
+              # TODO(domain): https://api.<domain>
+              - key: VITE_API_BASE_URL
+                sync: false
+            headers:
+              # D6 cache policy per content class.
+              # Hashed assets (/assets/index-<hash>.js) never change under the same name.
+              - path: /assets/*
+                name: Cache-Control
+                value: public, max-age=31536000, immutable
+              # HTML must be revalidated so a deploy is picked up immediately.
+              - path: /
+                name: Cache-Control
+                value: no-cache
+              - path: /index.html
+                name: Cache-Control
+                value: no-cache
+              # D7 security headers.
+              # TODO(domain): narrow connect-src from `https:` to the API origin.
+              - path: /*
+                name: Content-Security-Policy
+                value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+              - path: /*
+                name: Strict-Transport-Security
+                value: max-age=31536000; includeSubDomains
+              - path: /*
+                name: X-Content-Type-Options
+                value: nosniff
+              - path: /*
+                name: Referrer-Policy
+                value: strict-origin-when-cross-origin
+              - path: /*
+                name: X-Frame-Options
+                value: DENY
+              - path: /*
+                name: Permissions-Policy
+                value: camera=(), microphone=(), geolocation=()

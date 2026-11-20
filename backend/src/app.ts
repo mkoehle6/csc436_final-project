@@ -12,6 +12,13 @@ import { rateLimit } from "./middleware/rateLimit.js";
 export function createApp() {
   const app = express();
 
+  // Behind Render's load balancer (and later a CDN) the TCP peer is the proxy, not
+  // the visitor. TRUST_PROXY = number of proxy hops in front of the app, so req.ip
+  // (used by the rate limiter, S1) is the real client address and cannot be spoofed
+  // with an X-Forwarded-For header. Unset locally, where there is no proxy.
+  const proxyHops = Number(process.env.TRUST_PROXY ?? 0);
+  if (proxyHops > 0) app.set("trust proxy", proxyHops);
+
   app.use(
     pinoHttp({
       // Never log credentials: bearer tokens or session/login cookies.

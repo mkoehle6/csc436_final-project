@@ -117,6 +117,39 @@ write rejection (403), the core scoring calculation
 stubbed third-party integration (`backend/tests/simpsonsApi.test.ts`,
 retry/timeout/malformed-response handling with no real network call).
 
+## Deployment (Render)
+
+All infrastructure is defined in [`render.yaml`](render.yaml) (a Render
+Blueprint): one project `trivianerd` with **staging** and **production**
+environments, each with its own Postgres database, backend web service and
+frontend static site. Staging auto-deploys from `main` once CI checks pass;
+production never auto-deploys and is promoted from staging.
+
+Validate the Blueprint against Render's published schema
+(`https://render.com/schema/render.yaml.json`) before pushing changes to it.
+
+First-time setup (Render dashboard, Hobby workspace):
+
+1. **New → Blueprint**, connect GitHub with access to this repository only,
+   select it, and confirm the resources listed in `render.yaml`.
+2. Fill in the `sync: false` variables for each environment. Use a **separate
+   Google OAuth client and signing key per environment**:
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`: from that environment's Google
+     OAuth client (redirect URI `https://<api host>/auth/callback`).
+   - `AUTH_PRIVATE_JWK`: generate into a scratch file, paste the value, delete
+     the file: `cd backend; $env:ENV_FILE="$env:TEMP\stg.env"; npm run auth:keygen`
+   - `AUTH_ISSUER` (backend's https URL), `APP_BASE_URL` and
+     `CORS_ALLOWED_ORIGINS` (frontend's https URL), `GOOGLE_REDIRECT_URI`, and
+     the frontend's `VITE_API_BASE_URL` (backend's https URL).
+3. Login requires the frontend and backend to share a registrable domain
+   (e.g. `staging.<domain>` and `api.staging.<domain>`): browsers treat each
+   `*.onrender.com` subdomain as a separate site, so the session cookie would
+   not be sent between them.
+
+Migrations run automatically: on staging (free instance) at start, before the
+server listens; on production via `preDeployCommand`, so a failing migration
+fails the deploy while the previous version keeps serving.
+
 ## Status
 
 This is an in-progress build toward the full requirements checklist. Done so
