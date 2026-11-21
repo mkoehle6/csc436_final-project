@@ -54,6 +54,33 @@ async function topUp(category: Category): Promise<number> {
   return inserted.length;
 }
 
+/** Top-ups attempted per category during warm-up (each fetches at most 3 pages). */
+const WARM_UP_ATTEMPTS = 4;
+
+/**
+ * Fills each generatable category up to MIN_BANK_SIZE. Called once when the
+ * server starts (not awaited), so the first visitor after a deploy, or after a
+ * migration that cleared the bank, gets questions without waiting on the API.
+ */
+export async function warmUp(log: (message: string) => void): Promise<void> {
+  for (const category of GENERATABLE) {
+    for (let attempt = 1; attempt <= WARM_UP_ATTEMPTS; attempt++) {
+      const size = await bankSize(category);
+      if (size >= MIN_BANK_SIZE) {
+        log(`question bank ready: ${category} has ${size} questions`);
+        break;
+      }
+      try {
+        const added = await topUp(category);
+        log(`question bank warm-up: added ${added} ${category} questions (had ${size})`);
+      } catch (err) {
+        log(`question bank warm-up failed for ${category}: ${(err as Error).message}`);
+        break; // requests will retry on demand
+      }
+    }
+  }
+}
+
 export interface RoundResult {
   questions: PublicQuestion[];
   /** True when the bank needed topping up but The Simpsons API was unavailable. */

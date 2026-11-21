@@ -1,12 +1,17 @@
 import "./env.js"; // must stay first: loads .env before any module reads process.env
 import { createApp } from "./app.js";
 import { closeDb } from "./db/client.js";
+import { warmUp } from "./lib/questionBank.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const app = createApp();
 
 const server = app.listen(port, () => {
   console.log(`Backend listening on http://localhost:${port}`);
+  // Fill the question bank in the background; requests are served meanwhile.
+  warmUp((message) => console.log(message)).catch((err: unknown) =>
+    console.error("question bank warm-up error", err),
+  );
 });
 
 /**

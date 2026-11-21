@@ -124,6 +124,26 @@ describe("GET /api/questions (question bank)", () => {
     expect(res.body.questions).toHaveLength(5);
   });
 
+  it("warm-up fills an empty bank to the minimum at startup, then stops", async () => {
+    // 20 unique characters per page, so each top-up adds 20 new questions.
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const pageNo = Number(new URL(String(input instanceof Request ? input.url : input)).searchParams.get("page"));
+      const results = Array.from({ length: 20 }, (_, i) => ({
+        id: pageNo * 100 + i, name: `Resident ${pageNo}-${i}`, occupation: `Job ${pageNo}-${i}`, portrait_path: "/x.webp", phrases: [],
+      }));
+      return new Response(JSON.stringify({ count: 20, next: null, prev: null, pages: 60, results }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { warmUp, MIN_BANK_SIZE } = await import("../src/lib/questionBank.js");
+    const log: string[] = [];
+    await warmUp((m) => log.push(m));
+
+    const all = await db.select().from(schema.questions);
+    // Hand-predicted: 3 top-ups × 20 = 60 = MIN_BANK_SIZE, then a 4th check sees it is full.
+    expect(all).toHaveLength(MIN_BANK_SIZE);
+    expect(log.at(-1)).toBe("question bank ready: character has 60 questions");
+  });
+
   it("returns 502 only when the bank is empty and the provider is down", async () => {
     stubSimpsons("down");
     const res = await request(app).get("/api/questions");

@@ -11,8 +11,16 @@ export interface GeneratedQuestion {
   sourceEntityId: number;
 }
 
-/** Characters The Simpsons API reports across its pages (60 pages of 20). */
+/**
+ * The Simpsons API lists 1,182 characters on 60 pages: pages 1–59 hold 20 each,
+ * page 60 holds only 2, and up to a third of a page can have an "Unknown"
+ * occupation. A single page can therefore be too thin to build questions from
+ * (a question needs a subject plus three distinct wrong answers), so a top-up
+ * pools characters from several random pages.
+ */
 const CHARACTER_PAGES = 60;
+/** Upper bound on provider calls per top-up (respects the API's informal limits). */
+export const MAX_PAGES_PER_TOP_UP = 3;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -59,15 +67,43 @@ function buildOccupationQuestion(subject: QuizCharacter, pool: QuizCharacter[]):
   };
 }
 
+/** `n` distinct random page numbers in 1..CHARACTER_PAGES. */
+function randomPages(n: number): number[] {
+  return shuffle(Array.from({ length: CHARACTER_PAGES }, (_, i) => i + 1)).slice(0, n);
+}
+
 /**
- * Generates up to `count` character-occupation questions from one random page
- * of The Simpsons API. Throws a typed upstream error (rather than returning
- * malformed questions) when the API is down or the page has nothing usable.
+ * Generates up to `count` character-occupation questions from characters
+ * pooled across up to MAX_PAGES_PER_TOP_UP random pages of The Simpsons API.
+ * Fetching stops early once the pool is big enough. A failing page is skipped;
+ * only if every page fails is the provider reported unavailable. Never returns
+ * malformed questions: an unusable pool is a typed error too.
  */
 export async function generateCharacterQuestions(count: number): Promise<GeneratedQuestion[]> {
-  const page = Math.floor(Math.random() * CHARACTER_PAGES) + 1;
-  const { results } = await simpsonsApi.getCharactersPage(page);
-  const pool = toQuizCharacters(results);
+  const pool: QuizCharacter[] = [];
+  const seen = new Set<number>();
+  let fetched = 0;
+  let lastError: unknown;
+
+  for (const page of randomPages(MAX_PAGES_PER_TOP_UP)) {
+    if (pool.length >= count + 3) break; // enough subjects plus wrong answers
+    try {
+      const { results } = await simpsonsApi.getCharactersPage(page);
+      fetched += 1;
+      for (const c of toQuizCharacters(results)) {
+        if (!seen.has(c.id)) {
+          seen.add(c.id);
+          pool.push(c);
+        }
+      }
+    } catch (err) {
+      lastError = err; // try the next page
+    }
+  }
+
+  if (fetched === 0) {
+    throw lastError instanceof Error ? lastError : ApiErrors.upstreamUnavailable();
+  }
 
   const questions: GeneratedQuestion[] = [];
   for (const subject of shuffle(pool)) {
@@ -77,7 +113,7 @@ export async function generateCharacterQuestions(count: number): Promise<Generat
   }
 
   if (questions.length === 0) {
-    throw ApiErrors.upstreamUnavailable("Could not generate trivia questions from Simpsons API");
+    throw ApiErrors.upstreamUnavailable("The Simpsons API returned too few usable characters to build questions");
   }
   return questions;
 }

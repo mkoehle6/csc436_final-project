@@ -42,7 +42,9 @@ questionsRouter.get("/questions", async (req, res, next) => {
   try {
     const round = await getRound(parsed.data.category, parsed.data.count);
     if (round.questions.length === 0 && round.degraded) {
-      throw ApiErrors.upstreamUnavailable("No questions available while The Simpsons API is unreachable");
+      throw ApiErrors.upstreamUnavailable(
+        "No questions are available right now: the question bank is empty and The Simpsons API could not supply new ones",
+      );
     }
     if (round.degraded) req.log.warn("question bank top-up failed; served from the existing bank");
     res.setHeader("Cache-Control", "no-store");
