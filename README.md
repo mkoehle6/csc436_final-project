@@ -185,6 +185,21 @@ Frontend and backend must share a registrable domain: browsers treat each
 `*.onrender.com` subdomain as a separate site, so the session cookie would not
 be sent between them.
 
+### Promoting to production
+
+Production never deploys on its own. Run **GitHub → Actions → "Promote to
+production" → Run workflow** (tick *dry run* to only check). For each service,
+backend first, it deploys exactly the commit **staging** is running, and only if
+staging is healthy and CI passed for that commit; it then waits until production
+reports that commit (`/healthz` `commit`, frontend `<meta name="app-commit">`)
+and writes a before/after table to the run summary. Logic:
+[`scripts/promote.mjs`](scripts/promote.mjs).
+
+One-time setup: in Render, copy each production service's **Settings → Deploy
+Hook** URL into a GitHub repository secret (**Settings → Secrets and variables →
+Actions**): `RENDER_DEPLOY_HOOK_API_PROD` and `RENDER_DEPLOY_HOOK_WEB_PROD`.
+The URLs are secrets: anyone holding one can trigger a deploy.
+
 Migrations run automatically: on staging (free instance) at start, before the
 server listens; on production via `preDeployCommand`, so a failing migration
 fails the deploy while the previous version keeps serving.

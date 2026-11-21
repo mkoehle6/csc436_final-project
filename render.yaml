@@ -5,9 +5,10 @@
 # database, backend and frontend, with separate data and separate secrets.
 #
 #   push to main ──▶ CI (GitHub checks) ──▶ staging auto-deploys when checks pass
-#                                           production deploys only when promoted
-#                                           (autoDeployTrigger: off), so every
-#                                           change reaches production through staging.
+#   "Promote to production" workflow ──▶ production deploys exactly the commit
+#                                        staging runs (autoDeployTrigger: off here),
+#                                        so every change reaches production through
+#                                        staging (.github/workflows/promote.yml).
 #
 # Values marked `sync: false` are secrets, entered in the Render dashboard when
 # the Blueprint is first created and never stored in this file.
@@ -160,7 +161,7 @@ projects:
             region: oregon
             plan: 0.5c-512mb # cheapest paid: no sleeping, so the SLO is meaningful
             branch: main
-            autoDeployTrigger: off # promoted from staging only
+            autoDeployTrigger: off # promoted from staging only, via the Promote workflow's deploy hook
             buildCommand: npm ci --workspace=backend && npm run build --workspace=backend
             # Paid instances run migrations on a separate instance *before* traffic
             # moves: a failing migration fails the deploy and the old version keeps serving.

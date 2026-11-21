@@ -1,0 +1,54 @@
+# Promote staging → production (D3, D4).
+#
+# Production services in render.yaml never auto-deploy. This workflow is the
+# way changes reach production: for each service it deploys exactly the commit
+# staging is running, only if staging is healthy and CI passed for that commit,
+# then waits until production reports it. See scripts/promote.mjs.
+#
+# Run it from GitHub → Actions → "Promote to production" → Run workflow.
+# Requires repository secrets RENDER_DEPLOY_HOOK_API_PROD and
+# RENDER_DEPLOY_HOOK_WEB_PROD (Render → service → Settings → Deploy Hook).
+name: Promote to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Check and report only; deploy nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read # read CI results for the commit being promoted
+
+# Never run two promotions at once.
+concurrency:
+  group: promote-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote what staging runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Promote
+        env:
+          STAGING_API: https://trivia-staging-api.burnscodev.com
+          STAGING_WEB: https://trivia-staging.burnscodev.com
+          PROD_API: https://trivia-api.burnscodev.com
+          PROD_WEB: https://trivia.burnscodev.com
+          RENDER_DEPLOY_HOOK_API_PROD: ${{ secrets.RENDER_DEPLOY_HOOK_API_PROD }}
+          RENDER_DEPLOY_HOOK_WEB_PROD: ${{ secrets.RENDER_DEPLOY_HOOK_WEB_PROD }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node scripts/promote.mjs
