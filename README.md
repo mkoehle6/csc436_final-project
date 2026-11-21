@@ -46,10 +46,24 @@ npm run dev             # http://localhost:5173
 
 ## Backend
 
-- **Routes:** `GET /healthz`, `GET /api/questions`, `POST /api/questions`
-  (operator only), `DELETE /api/questions/:id` (operator only),
-  `POST /api/sessions`, `POST /api/sessions/:id/answers`,
-  `GET /api/sessions/:id`.
+- **Routes:**
+
+  | Route | Access | Notes |
+  | --- | --- | --- |
+  | `GET /healthz` | public | health check used by Render and CI |
+  | `GET /api/questions?count&category` | public | random round from the question bank; never includes answers; `Cache-Control: no-store` |
+  | `GET /api/questions/:id` | public | one question, no answer; 404 |
+  | `POST /api/questions/:id/check` | public | anonymous play: right/wrong + reveal; nothing stored; 400/404 |
+  | `POST /api/questions` | operator + `questions:write` | 201 + Location; 409 duplicate; audited |
+  | `DELETE /api/questions/:id` | operator + `questions:write` | 204; 404; 409 if answered; audited |
+  | `POST /api/sessions` | signed in, `trivia:play` | 201 + Location; audited |
+  | `POST /api/sessions/:id/answers` | signed in, `trivia:play` | server-scored; 201 + Location; 404 not yours; 409 repeat; audited |
+  | `GET /api/sessions/:id` | signed in, `trivia:read` | session + score; 404 not yours |
+- **Question bank:** questions are served from the database and topped up
+  from The Simpsons API only while a category holds fewer than 60, so page
+  views cause no writes once the bank is warm; if the API is down the bank
+  still serves (`degraded: true`). Unnamed extras and "Unknown" occupations
+  are filtered out (`backend/src/lib/characterFilters.ts`).
 - **Error shape:** every failure returns
   `{ "error": { "code": "...", "message": "...", "details"?: ... } }`.
 - **Database:** PostgreSQL via Drizzle ORM (`backend/src/db/schema.ts`), with

@@ -50,8 +50,13 @@ export const questions = pgTable(
     sourceEntityId: integer("source_entity_id").notNull(),
     createdAt: createdAt(),
   },
-  // The category filter selects questions by category.
-  (table) => [index("questions_category_idx").on(table.category)],
+  (table) => [
+    // The category filter selects questions by category.
+    index("questions_category_idx").on(table.category),
+    // The bank is topped up from the Simpsons API; inserts use ON CONFLICT DO
+    // NOTHING on this index, so the same question is never stored twice.
+    uniqueIndex("questions_category_prompt_uq").on(table.category, table.prompt),
+  ],
 );
 
 /**
@@ -89,8 +94,12 @@ export const answers = pgTable(
     isCorrect: boolean("is_correct").notNull(),
     answeredAt: timestamp("answered_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  // Scoring reads every answer of one session.
-  (table) => [index("answers_session_id_idx").on(table.sessionId)],
+  (table) => [
+    // Scoring reads every answer of one session.
+    index("answers_session_id_idx").on(table.sessionId),
+    // A question can be answered once per session; a second attempt is a 409.
+    uniqueIndex("answers_session_question_uq").on(table.sessionId, table.questionId),
+  ],
 );
 
 /**

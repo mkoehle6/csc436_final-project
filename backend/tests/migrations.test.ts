@@ -4,8 +4,8 @@ import type { Db } from "../src/db/client.js";
 import { rollbackLatest } from "../src/db/migrateDown.js";
 
 /**
- * F5: 0001_auth_sessions is reversible — up, down, and up again leaves the
- * same schema — run against real PostgreSQL semantics (in-memory PGlite).
+ * F5: 0002 and 0001 are reversible — up, down, and up again leaves the same
+ * schema — run against real PostgreSQL semantics (in-memory PGlite).
  */
 
 let closeDb: (() => Promise<void>) | undefined;
@@ -25,6 +25,13 @@ async function tables(db: Db): Promise<string[]> {
   return rows.map((r) => r.table_name);
 }
 
+async function indexes(db: Db): Promise<string[]> {
+  const { rows } = await db.execute<{ indexname: string }>(
+    sql`SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND indexname LIKE '%_uq' ORDER BY indexname`,
+  );
+  return rows.map((r) => r.indexname);
+}
+
 async function appliedCount(db: Db): Promise<number> {
   const { rows } = await db.execute<{ n: number | string }>(
     sql`SELECT COUNT(*) AS n FROM drizzle.__drizzle_migrations`,
@@ -37,7 +44,7 @@ describe("reversible migration (F5)", () => {
     await closeDb?.();
   });
 
-  it("applies, rolls back and re-applies 0001_auth_sessions", async () => {
+  it("applies, rolls back and re-applies 0002 and 0001", async () => {
     const { db, runMigrations } = await freshDb();
 
     await runMigrations();
@@ -52,6 +59,13 @@ describe("reversible migration (F5)", () => {
       "questions",
       "users",
     ]);
+    expect(await appliedCount(db)).toBe(3);
+    expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
+
+    // 0002 down: the unique indexes go, the tables stay.
+    expect(await rollbackLatest(db)).toBe("0002_unique_questions_answers");
+    expect(await indexes(db)).toEqual([]);
+    expect(await tables(db)).toEqual(fullSchema);
     expect(await appliedCount(db)).toBe(2);
 
     // Data in tables owned by 0000 must survive rolling back 0001.
@@ -66,12 +80,38 @@ describe("reversible migration (F5)", () => {
 
     await runMigrations();
     expect(await tables(db)).toEqual(fullSchema);
-    expect(await appliedCount(db)).toBe(2);
+    expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
+    expect(await appliedCount(db)).toBe(3);
+  });
+
+  it("0002 upgrades a database that already holds duplicate questions (as staging/prod did)", async () => {
+    const { db, runMigrations } = await freshDb();
+    await runMigrations();
+    await rollbackLatest(db); // back to the pre-0002 schema the deployed databases had
+
+    // Pre-0002 data: the same prompt stored three times, one copy answered by a player.
+    const q = (id: number) =>
+      sql`INSERT INTO questions (id, prompt, category, correct_answer, choices, source_entity_id)
+          OVERRIDING SYSTEM VALUE VALUES (${id}, 'What is Cora''s occupation?', 'character', 'Waiter', '["Waiter","Cook","Clown","Pilot"]', 1)`;
+    await db.execute(q(1));
+    await db.execute(q(2));
+    await db.execute(q(3));
+    await db.execute(sql`INSERT INTO users (id, oidc_subject, email) OVERRIDING SYSTEM VALUE VALUES (1, 's', 'moe@example.com')`);
+    await db.execute(sql`INSERT INTO game_sessions (id, user_id) OVERRIDING SYSTEM VALUE VALUES (1, 1)`);
+    await db.execute(sql`INSERT INTO answers (session_id, question_id, selected_answer, is_correct) VALUES (1, 2, 'Waiter', true)`);
+
+    await runMigrations(); // must not fail on the new unique index
+
+    // Hand-predicted: unreferenced copies 1 and 3 are cleared; answered copy 2 is kept.
+    const { rows } = await db.execute<{ id: number }>(sql`SELECT id FROM questions ORDER BY id`);
+    expect(rows.map((r) => Number(r.id))).toEqual([2]);
+    expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
   });
 
   it("refuses to roll back a migration that has no down file", async () => {
     const { db, runMigrations } = await freshDb();
     await runMigrations();
+    await rollbackLatest(db); // 0002 has a down file
     await rollbackLatest(db); // 0001 has a down file
     await expect(rollbackLatest(db)).rejects.toThrow(/0000_init is not reversible/);
   });

@@ -1,4 +1,5 @@
 import { simpsonsApi, type SimpsonsCharacter } from "../integrations/simpsonsApi.js";
+import { cleanName, cleanOccupation, isNamedCharacter } from "./characterFilters.js";
 import { ApiErrors } from "./errors.js";
 
 export interface GeneratedQuestion {
@@ -9,6 +10,9 @@ export interface GeneratedQuestion {
   imagePath: string;
   sourceEntityId: number;
 }
+
+/** Characters The Simpsons API reports across its pages (60 pages of 20). */
+const CHARACTER_PAGES = 60;
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items];
@@ -21,41 +25,54 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
-function buildOccupationQuestion(
-  subject: SimpsonsCharacter,
-  pool: SimpsonsCharacter[],
-): GeneratedQuestion | null {
-  if (!subject.occupation) return null;
-  const distractors = pool
-    .filter((c) => c.id !== subject.id && c.occupation && c.occupation !== subject.occupation)
-    .map((c) => c.occupation as string);
-  const uniqueDistractors = shuffle([...new Set(distractors)]).slice(0, 3);
-  if (uniqueDistractors.length < 3) return null;
+interface QuizCharacter {
+  id: number;
+  name: string;
+  occupation: string;
+}
+
+/** Keeps only named characters with a usable occupation, cleaned for display. */
+export function toQuizCharacters(characters: SimpsonsCharacter[]): QuizCharacter[] {
+  const result: QuizCharacter[] = [];
+  for (const c of characters) {
+    const occupation = cleanOccupation(c.occupation);
+    if (!occupation || !isNamedCharacter(c.name)) continue;
+    result.push({ id: c.id, name: cleanName(c.name), occupation });
+  }
+  return result;
+}
+
+function buildOccupationQuestion(subject: QuizCharacter, pool: QuizCharacter[]): GeneratedQuestion | null {
+  const distractors = [
+    ...new Set(pool.filter((c) => c.occupation !== subject.occupation).map((c) => c.occupation)),
+  ];
+  const picked = shuffle(distractors).slice(0, 3);
+  if (picked.length < 3) return null;
 
   return {
     prompt: `What is ${subject.name}'s occupation?`,
     category: "character",
     correctAnswer: subject.occupation,
-    choices: shuffle([subject.occupation, ...uniqueDistractors]),
+    choices: shuffle([subject.occupation, ...picked]),
     imagePath: simpsonsApi.imageUrl("character", subject.id),
     sourceEntityId: subject.id,
   };
 }
 
 /**
- * Generates `count` multiple-choice character-occupation questions by pulling a
- * page of characters from The Simpsons API. Falls back gracefully (throws a
- * typed ApiError) rather than ever returning a malformed question.
+ * Generates up to `count` character-occupation questions from one random page
+ * of The Simpsons API. Throws a typed upstream error (rather than returning
+ * malformed questions) when the API is down or the page has nothing usable.
  */
 export async function generateCharacterQuestions(count: number): Promise<GeneratedQuestion[]> {
-  const page = Math.floor(Math.random() * 60) + 1; // API reports 60 pages of characters
+  const page = Math.floor(Math.random() * CHARACTER_PAGES) + 1;
   const { results } = await simpsonsApi.getCharactersPage(page);
-  const candidates = shuffle(results);
+  const pool = toQuizCharacters(results);
 
   const questions: GeneratedQuestion[] = [];
-  for (const candidate of candidates) {
+  for (const subject of shuffle(pool)) {
     if (questions.length >= count) break;
-    const q = buildOccupationQuestion(candidate, results);
+    const q = buildOccupationQuestion(subject, pool);
     if (q) questions.push(q);
   }
 
