@@ -125,11 +125,14 @@ describe("GET /api/questions (question bank)", () => {
   });
 
   it("warm-up fills an empty bank to the minimum at startup, then stops", async () => {
-    // 20 unique characters per page, so each top-up adds 20 new questions.
-    global.fetch = vi.fn(async (input: string | URL | Request) => {
-      const pageNo = Number(new URL(String(input instanceof Request ? input.url : input)).searchParams.get("page"));
+    // 20 characters unique to each call (not each page: top-ups pick random pages,
+    // and a repeated page would correctly yield duplicates the bank skips), so
+    // every top-up adds exactly 20 new questions.
+    let call = 0;
+    global.fetch = vi.fn(async () => {
+      call += 1;
       const results = Array.from({ length: 20 }, (_, i) => ({
-        id: pageNo * 100 + i, name: `Resident ${pageNo}-${i}`, occupation: `Job ${pageNo}-${i}`, portrait_path: "/x.webp", phrases: [],
+        id: call * 100 + i, name: `Resident ${call}-${i}`, occupation: `Job ${call}-${i}`, portrait_path: "/x.webp", phrases: [],
       }));
       return new Response(JSON.stringify({ count: 20, next: null, prev: null, pages: 60, results }), { status: 200 });
     }) as unknown as typeof fetch;

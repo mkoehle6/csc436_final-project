@@ -50,7 +50,7 @@ npm run dev             # http://localhost:5173
 
   | Route | Access | Notes |
   | --- | --- | --- |
-  | `GET /healthz` | public | health check used by Render and CI |
+  | `GET /healthz` | public | 200 when the database answers (503 otherwise), plus the deployed `commit`; Render gates deploys on it. The Simpsons API is deliberately not checked (the app degrades without it). |
   | `GET /api/questions?count&category` | public | random round from the question bank; never includes answers; `Cache-Control: no-store` |
   | `GET /api/questions/:id` | public | one question, no answer; 404 |
   | `POST /api/questions/:id/check` | public | anonymous play: right/wrong + reveal; nothing stored; 400/404 |

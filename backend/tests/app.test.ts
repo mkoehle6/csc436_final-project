@@ -78,6 +78,12 @@ describe("API validation and authorization", () => {
   it("reports healthy status on /healthz", async () => {
     const { createApp } = await import("../src/app.js");
     const app = createApp();
+    // A fresh in-memory PGlite needs a few seconds to start (WebAssembly compile),
+    // longer than /healthz's 2 s database timeout; wait for it so we test the
+    // endpoint, not the embedded database's cold start.
+    const { db } = await import("../src/db/client.js");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`SELECT 1`);
 
     const res = await request(app).get("/healthz");
 
