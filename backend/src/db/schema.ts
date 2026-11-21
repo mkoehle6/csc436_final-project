@@ -142,6 +142,25 @@ export const authSessions = pgTable(
 );
 
 /**
+ * Live update events (F11), streamed to browsers over Server-Sent Events.
+ * Written in the same transaction as the change they announce, so an event is
+ * never lost or invented. The identity `id` is the SSE event id: a reconnecting
+ * client sends the last id it saw (Last-Event-ID) and receives exactly the
+ * events after it. Rows older than the replay window are pruned.
+ */
+export const liveEvents = pgTable(
+  "live_events",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    createdAt: createdAt(),
+  },
+  // Pruning deletes by age.
+  (table) => [index("live_events_created_at_idx").on(table.createdAt)],
+);
+
+/**
  * Append-only audit trail (F6): who (actor from validated token), what (action +
  * entity), when, and before/after state as JSON snapshots.
  */

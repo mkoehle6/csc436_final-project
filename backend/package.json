@@ -15,7 +15,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:rollback": "tsx src/db/migrateDown.ts",
     "auth:keygen": "tsx src/scripts/keygen.ts",
-    "user:set-role": "tsx src/scripts/setRole.ts"
+    "user:set-role": "tsx src/scripts/setRole.ts",
+    "demo:live-recovery": "node src/scripts/runLiveRecoveryDemo.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.17",

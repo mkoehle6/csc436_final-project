@@ -59,6 +59,19 @@ npm run dev             # http://localhost:5173
   | `POST /api/sessions` | signed in, `trivia:play` | 201 + Location; audited |
   | `POST /api/sessions/:id/answers` | signed in, `trivia:play` | server-scored; 201 + Location; 404 not yours; 409 repeat; audited |
   | `GET /api/sessions/:id` | signed in, `trivia:read` | session + score; 404 not yours |
+- **Live leaderboard (F11):** Server-Sent Events at `GET /api/live/leaderboard`
+  (snapshot: `GET /api/leaderboard`, `Cache-Control: public, max-age=5`).
+  *Why SSE, not WebSockets:* updates only flow server → browser; SSE is plain
+  HTTPS, so Render, the CDN and the CORS allowlist treat it like any GET; and
+  the browser's `EventSource` reconnects by itself and sends `Last-Event-ID`,
+  which is exactly the resume mechanism needed. Each event is written to
+  `live_events` in the same transaction as the answer it announces (ids
+  serialised with a transaction-level advisory lock so they commit in order);
+  every stream keeps a cursor and sends events with id > cursor, so a client
+  reconnecting with its last id (even to a restarted server) gets exactly what
+  it missed. Players appear only under synthetic nicknames (`live/nickname.ts`),
+  never real names. Kill-and-recover demo across a real process restart:
+  `npm run demo:live-recovery --workspace=backend`.
 - **Question bank:** questions are served from the database and topped up
   from The Simpsons API only while a category holds fewer than 60, so page
   views cause no writes once the bank is warm; if the API is down the bank

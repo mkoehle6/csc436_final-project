@@ -4,7 +4,7 @@ import type { Db } from "../src/db/client.js";
 import { rollbackLatest } from "../src/db/migrateDown.js";
 
 /**
- * F5: 0002 and 0001 are reversible — up, down, and up again leaves the same
+ * F5: 0003, 0002 and 0001 are reversible — up, down, and up again leaves the same
  * schema — run against real PostgreSQL semantics (in-memory PGlite).
  */
 
@@ -44,28 +44,34 @@ describe("reversible migration (F5)", () => {
     await closeDb?.();
   });
 
-  it("applies, rolls back and re-applies 0002 and 0001", async () => {
+  it("applies, rolls back and re-applies 0003, 0002 and 0001", async () => {
     const { db, runMigrations } = await freshDb();
 
     await runMigrations();
     const fullSchema = await tables(db);
-    // Hand-predicted: 5 tables from 0000 plus 2 from 0001 (drizzle's bookkeeping lives in its own schema).
+    // Hand-predicted: 5 tables from 0000, 2 from 0001, 1 from 0003 (drizzle's bookkeeping lives in its own schema).
     expect(fullSchema).toEqual([
       "answers",
       "audit_log",
       "auth_sessions",
       "game_sessions",
+      "live_events",
       "oauth_login_states",
       "questions",
       "users",
     ]);
+    expect(await appliedCount(db)).toBe(4);
+
+    // 0003 down: the live-event buffer goes, everything else stays.
+    expect(await rollbackLatest(db)).toBe("0003_live_events");
+    expect(await tables(db)).toEqual(fullSchema.filter((t) => t !== "live_events"));
     expect(await appliedCount(db)).toBe(3);
     expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
 
     // 0002 down: the unique indexes go, the tables stay.
     expect(await rollbackLatest(db)).toBe("0002_unique_questions_answers");
     expect(await indexes(db)).toEqual([]);
-    expect(await tables(db)).toEqual(fullSchema);
+    expect(await tables(db)).toEqual(fullSchema.filter((t) => t !== "live_events"));
     expect(await appliedCount(db)).toBe(2);
 
     // Data in tables owned by 0000 must survive rolling back 0001.
@@ -81,13 +87,14 @@ describe("reversible migration (F5)", () => {
     await runMigrations();
     expect(await tables(db)).toEqual(fullSchema);
     expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
-    expect(await appliedCount(db)).toBe(3);
+    expect(await appliedCount(db)).toBe(4);
   });
 
   it("0002 upgrades a database that already holds duplicate questions (as staging/prod did)", async () => {
     const { db, runMigrations } = await freshDb();
     await runMigrations();
-    await rollbackLatest(db); // back to the pre-0002 schema the deployed databases had
+    await rollbackLatest(db); // 0003
+    await rollbackLatest(db); // 0002: back to the pre-0002 schema the deployed databases had
 
     // Pre-0002 data: the same prompt stored three times, one copy answered by a player.
     const q = (id: number) =>
@@ -111,6 +118,7 @@ describe("reversible migration (F5)", () => {
   it("refuses to roll back a migration that has no down file", async () => {
     const { db, runMigrations } = await freshDb();
     await runMigrations();
+    await rollbackLatest(db); // 0003 has a down file
     await rollbackLatest(db); // 0002 has a down file
     await rollbackLatest(db); // 0001 has a down file
     await expect(rollbackLatest(db)).rejects.toThrow(/0000_init is not reversible/);

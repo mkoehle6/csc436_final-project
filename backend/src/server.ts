@@ -2,6 +2,7 @@ import "./env.js"; // must stay first: loads .env before any module reads proces
 import { createApp } from "./app.js";
 import { closeDb } from "./db/client.js";
 import { warmUp } from "./lib/questionBank.js";
+import { closeAllStreams } from "./routes/live.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const app = createApp();
@@ -32,6 +33,9 @@ function shutdown(signal: string) {
   const forceExit = setTimeout(() => process.exit(1), 5000);
   forceExit.unref();
 
+  // Open SSE streams would hold server.close() open; ending them lets clients
+  // reconnect (with Last-Event-ID) to the next instance and resume (F11).
+  closeAllStreams();
   server.close(() => {
     closeDb()
       .catch((err: unknown) => console.error("error closing database", err))

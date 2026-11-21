@@ -8,12 +8,18 @@ import { computeScore } from "../lib/scoring.js";
 import { SCOPES } from "../auth/scopes.js";
 import { actorUserId, requireAuth, requireScope } from "../middleware/auth.js";
 import { limits } from "../middleware/rateLimit.js";
+import { recordAudit } from "../lib/audit.js";
+import { notifyNewEvents, publishInTx, pruneOldEvents } from "../live/events.js";
+import { leaderboard } from "../live/leaderboard.js";
+import { nicknameFor } from "../live/nickname.js";
+
+export const sessionsRouter = Router();
 
 /** Starting sessions and submitting answers: counted per signed-in player (S1). */
 const playLimiter = limits.writes();
-import { recordAudit } from "../lib/audit.js";
 
-export const sessionsRouter = Router();
+/** Prune the live-event replay buffer every this many events. */
+const PRUNE_EVERY = 100;
 
 /** POST /api/sessions — start a new game session for the authenticated user. */
 sessionsRouter.post("/sessions", requireAuth, requireScope(SCOPES.play), playLimiter, async (req, res, next) => {
@@ -95,8 +101,18 @@ sessionsRouter.post("/sessions/:id/answers", requireAuth, requireScope(SCOPES.pl
         before: { score: session.score },
         after: { sessionId, questionId: question.id, isCorrect, score: score.points },
       });
-      return { answer: created, score };
+      // F11: the live event is part of the same transaction as the answer, so it
+      // exists if and only if the answer does. Public payload: nickname only.
+      const eventId = await publishInTx(tx, "score", {
+        player: nicknameFor(userId),
+        isCorrect,
+        sessionPoints: score.points,
+        leaderboard: await leaderboard(tx),
+      });
+      return { answer: created, score, eventId };
     });
+    notifyNewEvents(); // after commit: wake open streams
+    if (result.eventId % PRUNE_EVERY === 0) void pruneOldEvents(db).catch(() => undefined);
 
     res
       .status(201)

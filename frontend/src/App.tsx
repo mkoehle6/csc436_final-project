@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import "./App.css";
 import { useAuth } from "./auth/authContext";
 import { Header } from "./components/Header";
+import { Leaderboard } from "./components/Leaderboard";
 import { QuestionList } from "./components/QuestionList";
 import { QuizPanel } from "./components/QuizPanel";
 import { ScoreBar } from "./components/ScoreBar";
@@ -71,6 +72,7 @@ function App() {
               answeredIds={answeredIds}
             />
           )}
+          <Leaderboard />
         </aside>
 
         <section className="app-content">

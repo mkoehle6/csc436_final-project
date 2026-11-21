@@ -22,6 +22,13 @@
       "when": 1795227147079,
       "tag": "0002_unique_questions_answers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795232974015,
+      "tag": "0003_live_events",
+      "breakpoints": true
     }
   ]
 }
