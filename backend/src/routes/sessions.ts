@@ -7,12 +7,16 @@ import { ApiErrors } from "../lib/errors.js";
 import { computeScore } from "../lib/scoring.js";
 import { SCOPES } from "../auth/scopes.js";
 import { actorUserId, requireAuth, requireScope } from "../middleware/auth.js";
+import { limits } from "../middleware/rateLimit.js";
+
+/** Starting sessions and submitting answers: counted per signed-in player (S1). */
+const playLimiter = limits.writes();
 import { recordAudit } from "../lib/audit.js";
 
 export const sessionsRouter = Router();
 
 /** POST /api/sessions — start a new game session for the authenticated user. */
-sessionsRouter.post("/sessions", requireAuth, requireScope(SCOPES.play), async (req, res, next) => {
+sessionsRouter.post("/sessions", requireAuth, requireScope(SCOPES.play), playLimiter, async (req, res, next) => {
   try {
     const userId = actorUserId(req);
     const [created] = await db.insert(gameSessions).values({ userId }).returning();
@@ -46,7 +50,7 @@ function isUniqueViolation(err: unknown): boolean {
  * question was already answered in the session. The answer, the session's
  * running score and the audit entry are written in one transaction.
  */
-sessionsRouter.post("/sessions/:id/answers", requireAuth, requireScope(SCOPES.play), async (req, res, next) => {
+sessionsRouter.post("/sessions/:id/answers", requireAuth, requireScope(SCOPES.play), playLimiter, async (req, res, next) => {
   const sessionId = Number(req.params.id);
   const parsed = submitAnswerSchema.safeParse(req.body);
   if (!Number.isInteger(sessionId) || sessionId <= 0) {

@@ -7,7 +7,7 @@ import { authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
 import { questionsRouter } from "./routes/questions.js";
 import { sessionsRouter } from "./routes/sessions.js";
-import { rateLimit } from "./middleware/rateLimit.js";
+import { limits } from "./middleware/rateLimit.js";
 
 export function createApp() {
   const app = express();
@@ -61,7 +61,7 @@ export function createApp() {
   app.use(authRouter);
   app.use(
     "/api",
-    rateLimit({ windowMs: 60_000, max: 120 }),
+    limits.api(), // backstop; stricter per-class limits are on the routes (S1)
     questionsRouter,
     sessionsRouter,
   );

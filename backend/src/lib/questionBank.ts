@@ -54,6 +54,41 @@ async function topUp(category: Category): Promise<number> {
   return inserted.length;
 }
 
+/**
+ * Protects The Simpsons API from request-driven bursts (S1, F10):
+ *  - single-flight: concurrent requests share one in-progress top-up instead
+ *    of each starting their own;
+ *  - cooldown: after an attempt (successful or not), requests wait at least
+ *    TOP_UP_COOLDOWN_MS before triggering another, so a failing provider is
+ *    not retried on every page view.
+ * Warm-up at startup bypasses the cooldown (it is the server's own bounded loop).
+ */
+const DEFAULT_TOP_UP_COOLDOWN_MS = 10_000;
+const topUpState = new Map<Category, { inFlight: Promise<number> | null; lastAttemptAt: number }>();
+
+const cooldownMs = () => Number(process.env.QUESTION_TOPUP_COOLDOWN_MS ?? DEFAULT_TOP_UP_COOLDOWN_MS);
+
+type TopUpOutcome = { status: "done"; added: number } | { status: "skipped" };
+
+async function guardedTopUp(category: Category, { bypassCooldown = false } = {}): Promise<TopUpOutcome> {
+  let state = topUpState.get(category);
+  if (!state) {
+    state = { inFlight: null, lastAttemptAt: 0 };
+    topUpState.set(category, state);
+  }
+  if (state.inFlight) return { status: "done", added: await state.inFlight };
+  if (!bypassCooldown && Date.now() - state.lastAttemptAt < cooldownMs()) return { status: "skipped" };
+
+  state.lastAttemptAt = Date.now();
+  const run = topUp(category);
+  state.inFlight = run;
+  try {
+    return { status: "done", added: await run };
+  } finally {
+    state.inFlight = null;
+  }
+}
+
 /** Top-ups attempted per category during warm-up (each fetches at most 3 pages). */
 const WARM_UP_ATTEMPTS = 4;
 
@@ -64,34 +99,39 @@ const WARM_UP_ATTEMPTS = 4;
  */
 export async function warmUp(log: (message: string) => void): Promise<void> {
   for (const category of GENERATABLE) {
-    for (let attempt = 1; attempt <= WARM_UP_ATTEMPTS; attempt++) {
-      const size = await bankSize(category);
-      if (size >= MIN_BANK_SIZE) {
-        log(`question bank ready: ${category} has ${size} questions`);
-        break;
-      }
+    let size = await bankSize(category);
+    for (let attempt = 1; attempt <= WARM_UP_ATTEMPTS && size < MIN_BANK_SIZE; attempt++) {
       try {
-        const added = await topUp(category);
+        const outcome = await guardedTopUp(category, { bypassCooldown: true });
+        const added = outcome.status === "done" ? outcome.added : 0;
         log(`question bank warm-up: added ${added} ${category} questions (had ${size})`);
       } catch (err) {
         log(`question bank warm-up failed for ${category}: ${(err as Error).message}`);
         break; // requests will retry on demand
       }
+      size = await bankSize(category);
     }
+    // Always report the final state, including when attempts ran out.
+    log(
+      size >= MIN_BANK_SIZE
+        ? `question bank ready: ${category} has ${size} questions`
+        : `question bank below minimum: ${category} has ${size} of ${MIN_BANK_SIZE}; requests will top up on demand`,
+    );
   }
 }
 
 export interface RoundResult {
   questions: PublicQuestion[];
-  /** True when the bank needed topping up but The Simpsons API was unavailable. */
+  /** True when the bank needed topping up but could not be (provider down, or in cooldown while empty). */
   degraded: boolean;
 }
 
 export async function getRound(category: Category, size: number): Promise<RoundResult> {
   let degraded = false;
+  let skipped = false;
   if (GENERATABLE.has(category) && (await bankSize(category)) < Math.max(MIN_BANK_SIZE, size)) {
     try {
-      await topUp(category);
+      skipped = (await guardedTopUp(category)).status === "skipped";
     } catch {
       degraded = true; // serve whatever the bank has
     }
@@ -104,5 +144,7 @@ export async function getRound(category: Category, size: number): Promise<RoundR
     .orderBy(sql`random()`)
     .limit(size);
 
+  // A skipped top-up is only a problem if it leaves the player with nothing.
+  if (skipped && rows.length === 0) degraded = true;
   return { questions: rows, degraded };
 }

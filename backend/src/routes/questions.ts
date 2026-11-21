@@ -7,12 +7,20 @@ import { ApiErrors } from "../lib/errors.js";
 import { getRound, publicQuestionColumns } from "../lib/questionBank.js";
 import { SCOPES } from "../auth/scopes.js";
 import { actorUserId, requireAuth, requireRole, requireScope } from "../middleware/auth.js";
+import { limits } from "../middleware/rateLimit.js";
 import { recordAudit } from "../lib/audit.js";
 
 export const questionsRouter = Router();
 
-/** Writes need a valid token (401), the operator role (403) and the questions:write scope (403). */
-const canWriteQuestions = [requireAuth, requireRole("operator"), requireScope(SCOPES.writeQuestions)];
+/**
+ * Writes need a valid token (401), the operator role (403) and the
+ * questions:write scope (403), and are rate-limited per operator (429, S1).
+ * The limiter runs after auth so it can count per user rather than per IP.
+ */
+const canWriteQuestions = [requireAuth, requireRole("operator"), requireScope(SCOPES.writeQuestions), limits.writes()];
+
+/** GET /api/questions can trigger Simpsons API calls (bank top-ups), so it has its own limit (S1). */
+const questionReadLimiter = limits.thirdParty();
 
 const categorySchema = z.enum(questions.category.enumValues);
 
@@ -33,7 +41,7 @@ const listQuerySchema = z.object({
  * GET /api/questions — public. A random round from the question bank, without
  * correct answers. Random per request, so never shared-cached (D6).
  */
-questionsRouter.get("/questions", async (req, res, next) => {
+questionsRouter.get("/questions", questionReadLimiter, async (req, res, next) => {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) {
     next(ApiErrors.badRequest("Invalid query parameters", parsed.error.flatten()));

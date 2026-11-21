@@ -15,7 +15,7 @@ import { issueAccessToken } from "../auth/tokens.js";
 import { recordAudit } from "../lib/audit.js";
 import { ApiErrors } from "../lib/errors.js";
 import { isAllowedOrigin } from "../lib/origins.js";
-import { rateLimit } from "../middleware/rateLimit.js";
+import { limits } from "../middleware/rateLimit.js";
 
 /**
  * Login flow (F7):
@@ -29,7 +29,9 @@ import { rateLimit } from "../middleware/rateLimit.js";
 export const authRouter = Router();
 
 // S1: logins are the classic brute-force/abuse target, so they get a tighter limit than /api.
-const loginLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+const loginLimiter = limits.login();
+// Token refresh runs on every page load and ~every 14 min, so it gets a roomier limit.
+const tokenLimiter = limits.token();
 
 function baseCookieOptions(): CookieOptions {
   return {
@@ -137,7 +139,7 @@ authRouter.get("/auth/callback", loginLimiter, async (req, res) => {
   }
 });
 
-authRouter.post("/auth/token", async (req, res, next) => {
+authRouter.post("/auth/token", tokenLimiter, async (req, res, next) => {
   try {
     requireAllowedOrigin(req);
     res.setHeader("Cache-Control", "no-store");
@@ -163,7 +165,7 @@ authRouter.post("/auth/token", async (req, res, next) => {
   }
 });
 
-authRouter.post("/auth/logout", async (req, res, next) => {
+authRouter.post("/auth/logout", tokenLimiter, async (req, res, next) => {
   try {
     requireAllowedOrigin(req);
     const token = readCookie(req, SESSION_COOKIE);

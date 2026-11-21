@@ -108,11 +108,17 @@ describe("GET /api/questions (question bank)", () => {
   });
 
   it("does not store duplicates when the bank is topped up again from the same data", async () => {
-    stubSimpsons("up");
-    await request(app).get("/api/questions");
-    await request(app).get("/api/questions");
-    const all = await db.select().from(schema.questions);
-    expect(all).toHaveLength(5); // same 5 prompts both times; the unique index absorbs the repeat
+    process.env.QUESTION_TOPUP_COOLDOWN_MS = "0"; // allow the second top-up this test is about
+    try {
+      stubSimpsons("up");
+      await request(app).get("/api/questions");
+      await request(app).get("/api/questions");
+      expect(simpsonsCalls).toBeGreaterThan(1); // the second request really did top up again
+      const all = await db.select().from(schema.questions);
+      expect(all).toHaveLength(5); // same 5 prompts both times; the unique index absorbs the repeat
+    } finally {
+      delete process.env.QUESTION_TOPUP_COOLDOWN_MS;
+    }
   });
 
   it("degrades gracefully: serves the existing bank when the provider is down", async () => {
@@ -142,9 +148,13 @@ describe("GET /api/questions (question bank)", () => {
     await warmUp((m) => log.push(m));
 
     const all = await db.select().from(schema.questions);
-    // Hand-predicted: 3 top-ups × 20 = 60 = MIN_BANK_SIZE, then a 4th check sees it is full.
-    expect(all).toHaveLength(MIN_BANK_SIZE);
-    expect(log.at(-1)).toBe("question bank ready: character has 60 questions");
+    // Hand-predicted: usually 3 top-ups × 20 = 60. But top-ups pick random pages and
+    // the Simpsons API client caches pages, so a repeated page yields duplicates the
+    // bank skips, and one extra top-up may run. Property that must hold: it reaches
+    // the minimum, overshoots by at most one batch (20), and reports ready.
+    expect(all.length).toBeGreaterThanOrEqual(MIN_BANK_SIZE);
+    expect(all.length).toBeLessThanOrEqual(MIN_BANK_SIZE + 20);
+    expect(log.at(-1)).toBe(`question bank ready: character has ${all.length} questions`);
   });
 
   it("returns 502 only when the bank is empty and the provider is down", async () => {

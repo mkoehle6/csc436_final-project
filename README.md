@@ -104,8 +104,20 @@ npm run dev             # http://localhost:5173
   wraps The Simpsons API with a request timeout, bounded retry (5xx only),
   a TTL cache, zod runtime response validation, and typed errors for
   graceful degradation when the provider is down.
-- **Rate limiting:** `backend/src/middleware/rateLimit.ts`, applied to all
-  `/api` routes.
+- **Rate limiting (S1):** `backend/src/middleware/rateLimit.ts`; every response
+  carries `RateLimit-Policy/Limit/Remaining/Reset`, a refusal is 429 +
+  `Retry-After` in the standard error shape.
+
+  | Class | Limit | Keyed by | Routes |
+  | --- | --- | --- | --- |
+  | login | 20/min | IP | `/auth/login`, `/auth/callback` |
+  | token | 60/min | IP | `/auth/token`, `/auth/logout` |
+  | writes | 30/min | signed-in user (else IP) | `POST /api/sessions`, `POST /api/sessions/:id/answers`; operator question writes (separate budget) |
+  | third-party-backed | 30/min | IP | `GET /api/questions` (may top up from The Simpsons API) |
+  | API backstop | 120/min | IP | everything under `/api` |
+
+  The Simpsons API is additionally protected from bursts: concurrent requests
+  share one in-flight top-up, and top-ups are at least 10 s apart.
 
 ## Frontend
 
