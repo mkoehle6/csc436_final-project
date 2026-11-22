@@ -11,8 +11,11 @@ import { pkceChallenge, randomToken, type GoogleIdentity } from "./google.js";
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const fromNow = (ms: number) => new Date(Date.now() + ms);
 
-/** Starts a login: stores state/nonce/PKCE verifier and returns what the redirect needs. */
-export async function createLoginState() {
+/**
+ * Starts a login: stores state/nonce/PKCE verifier and returns what the redirect needs.
+ * `returnTo` (already validated by the caller) resumes an MCP authorization afterwards.
+ */
+export async function createLoginState(returnTo?: string) {
   // Sweep abandoned logins so this table cannot grow without bound.
   await db.delete(oauthLoginStates).where(lt(oauthLoginStates.expiresAt, new Date()));
 
@@ -24,6 +27,7 @@ export async function createLoginState() {
     nonce,
     codeVerifier,
     expiresAt: fromNow(authConfig.loginStateTtlMs),
+    returnTo: returnTo ?? null,
   });
   return { state, nonce, codeChallenge: pkceChallenge(codeVerifier) };
 }
@@ -32,7 +36,7 @@ export async function createLoginState() {
 export async function consumeLoginState(state: string) {
   const [row] = await db.delete(oauthLoginStates).where(eq(oauthLoginStates.state, state)).returning();
   if (!row || row.expiresAt.getTime() < Date.now()) return null;
-  return { nonce: row.nonce, codeVerifier: row.codeVerifier };
+  return { nonce: row.nonce, codeVerifier: row.codeVerifier, returnTo: row.returnTo };
 }
 
 /** Finds the user for a Google identity, creating a `viewer` on first login. */

@@ -66,9 +66,20 @@ function requireAllowedOrigin(req: Request) {
   }
 }
 
-authRouter.get("/auth/login", loginLimiter, async (_req, res, next) => {
+/**
+ * A login started by an MCP client's authorization request resumes it afterwards.
+ * Only a path on this server's own authorize endpoint is accepted, so return_to
+ * can never become an open redirect to another site.
+ */
+function safeReturnTo(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const safe = value.startsWith("/auth/oauth/authorize?") && !value.includes("\\") && !/[\r\n]/.test(value);
+  return safe ? value : undefined;
+}
+
+authRouter.get("/auth/login", loginLimiter, async (req, res, next) => {
   try {
-    const { state, nonce, codeChallenge } = await createLoginState();
+    const { state, nonce, codeChallenge } = await createLoginState(safeReturnTo(req.query.return_to));
     // Binds the login to this browser: the callback must present the same state in a cookie.
     res.cookie(LOGIN_STATE_COOKIE, state, cookieOptions(authConfig.loginStateTtlMs));
     res.setHeader("Cache-Control", "no-store");
@@ -128,7 +139,8 @@ authRouter.get("/auth/callback", loginLimiter, async (req, res) => {
     });
 
     res.cookie(SESSION_COOKIE, session.token, cookieOptions(authConfig.sessionTtlMs));
-    res.redirect(302, `${authConfig.appBaseUrl}/`);
+    // Back to the MCP consent screen if that is where the login started (same host, path only).
+    res.redirect(302, login.returnTo ?? `${authConfig.appBaseUrl}/`);
   } catch (err) {
     if (err instanceof LoginFlowError) {
       fail(err.reason, err.message);

@@ -33,3 +33,32 @@ export async function issueAccessToken(user: { id: number; role: Role }): Promis
 
   return { accessToken, expiresAt: new Date(exp * 1000).toISOString(), scope };
 }
+
+/**
+ * Issues an access token for an MCP client (F12). Differs from the web-app token
+ * in exactly the ways that keep the two apart: `aud` is the MCP server's
+ * canonical URI (RFC 8707), `scope` is only what the user consented to, and
+ * `client_id` records which MCP client holds it.
+ */
+export async function issueMcpAccessToken(grant: {
+  userId: number;
+  role: Role;
+  scope: string;
+  clientId: string;
+}): Promise<{ accessToken: string; expiresIn: number }> {
+  const key = await getSigningKey();
+  const now = Math.floor(Date.now() / 1000);
+  const expiresIn = authConfig.mcp.accessTokenTtlSeconds;
+
+  const accessToken = await new SignJWT({ role: grant.role, scope: grant.scope, client_id: grant.clientId })
+    .setProtectedHeader({ alg: "ES256", kid: key.kid, typ: "at+jwt" })
+    .setIssuer(authConfig.issuer)
+    .setAudience(authConfig.mcpResource)
+    .setSubject(String(grant.userId))
+    .setIssuedAt(now)
+    .setExpirationTime(now + expiresIn)
+    .setJti(randomUUID())
+    .sign(key.privateKey);
+
+  return { accessToken, expiresIn };
+}

@@ -21,10 +21,27 @@ export interface AppClaims extends JWTPayload {
 }
 
 export async function verifyAccessToken(token: string): Promise<AppClaims> {
+  return verify(token, authConfig.audience);
+}
+
+export interface McpClaims extends AppClaims {
+  client_id?: string;
+}
+
+/**
+ * Validates an MCP access token (F12): same checks as the web-app token, but the
+ * audience must be the MCP server's canonical URI. Web-app tokens fail here and
+ * MCP tokens fail verifyAccessToken: no token is accepted outside its audience.
+ */
+export async function verifyMcpAccessToken(token: string): Promise<McpClaims> {
+  return verify(token, authConfig.mcpResource);
+}
+
+async function verify(token: string, audience: string): Promise<AppClaims> {
   const { verificationKeys } = await getSigningKey();
   const { payload } = await jwtVerify(token, verificationKeys, {
     issuer: authConfig.issuer,
-    audience: authConfig.audience,
+    audience,
     algorithms: ["ES256"],
     typ: "at+jwt",
     requiredClaims: ["sub", "exp", "iat"],

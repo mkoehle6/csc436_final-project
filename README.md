@@ -111,6 +111,18 @@ npm run dev             # http://localhost:5173
   - Google console setup: OAuth client of type *Web application*, authorized
     redirect URI `http://localhost:3001/auth/callback` (plus each deployed
     backend's `/auth/callback`).
+- **MCP authorization server (F12, phase 1):** design in
+  [`docs/design/mcp.md`](docs/design/mcp.md). Per the MCP authorization spec
+  2026-07-28 the backend serves RFC 9728 resource metadata
+  (`/.well-known/oauth-protected-resource[/mcp]`) and RFC 8414 server metadata
+  (`/.well-known/oauth-authorization-server`). MCP clients identify themselves with
+  Client ID Metadata Documents (fetched with SSRF protection,
+  `backend/src/oauth/clientMetadata.ts`), sign the user in through the normal Google
+  login, show a consent screen, and use authorization code + PKCE (S256) with
+  `resource` = the MCP URL (`/auth/oauth/authorize`, `/auth/oauth/token`). Access
+  tokens have `aud` = the MCP URL and are refused by the web API (and vice versa);
+  scopes are capped by role; refresh tokens rotate, and code or refresh-token reuse
+  revokes the whole token family.
 - **Rollback:** `npm run db:rollback` reverses the latest migration using
   `backend/src/db/migrations-down/<tag>.down.sql`.
 - **Third-party integration:** `backend/src/integrations/simpsonsApi.ts`

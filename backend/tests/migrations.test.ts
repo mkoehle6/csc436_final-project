@@ -4,7 +4,7 @@ import type { Db } from "../src/db/client.js";
 import { rollbackLatest } from "../src/db/migrateDown.js";
 
 /**
- * F5: 0003, 0002 and 0001 are reversible — up, down, and up again leaves the same
+ * F5: 0004, 0003, 0002 and 0001 are reversible — up, down, and up again leaves the same
  * schema — run against real PostgreSQL semantics (in-memory PGlite).
  */
 
@@ -44,34 +44,55 @@ describe("reversible migration (F5)", () => {
     await closeDb?.();
   });
 
-  it("applies, rolls back and re-applies 0003, 0002 and 0001", async () => {
+  it("applies, rolls back and re-applies 0004, 0003, 0002 and 0001", async () => {
     const { db, runMigrations } = await freshDb();
+    const hasReturnTo = async () =>
+      (
+        await db.execute(
+          sql`SELECT 1 FROM information_schema.columns WHERE table_name = 'oauth_login_states' AND column_name = 'return_to'`,
+        )
+      ).rows.length === 1;
 
     await runMigrations();
     const fullSchema = await tables(db);
-    // Hand-predicted: 5 tables from 0000, 2 from 0001, 1 from 0003 (drizzle's bookkeeping lives in its own schema).
+    // Hand-predicted: 5 tables from 0000, 2 from 0001, 1 from 0003, 2 from 0004
+    // (drizzle's bookkeeping lives in its own schema).
     expect(fullSchema).toEqual([
       "answers",
       "audit_log",
       "auth_sessions",
       "game_sessions",
       "live_events",
+      "oauth_authorization_codes",
       "oauth_login_states",
+      "oauth_refresh_tokens",
       "questions",
       "users",
     ]);
+    expect(await appliedCount(db)).toBe(5);
+    expect(await hasReturnTo()).toBe(true);
+    const gameIndexes = ["answers_session_question_uq", "questions_category_prompt_uq"];
+    expect(await indexes(db)).toEqual([gameIndexes[0], "oauth_codes_hash_uq", "oauth_refresh_hash_uq", gameIndexes[1]]);
+
+    // 0004 down: MCP OAuth tables and the return_to column go, everything else stays.
+    const withoutOauth = fullSchema.filter((t) => t !== "oauth_authorization_codes" && t !== "oauth_refresh_tokens");
+    expect(await rollbackLatest(db)).toBe("0004_mcp_oauth");
+    expect(await tables(db)).toEqual(withoutOauth);
+    expect(await hasReturnTo()).toBe(false);
+    expect(await indexes(db)).toEqual(gameIndexes);
     expect(await appliedCount(db)).toBe(4);
 
     // 0003 down: the live-event buffer goes, everything else stays.
+    const without0003 = withoutOauth.filter((t) => t !== "live_events");
     expect(await rollbackLatest(db)).toBe("0003_live_events");
-    expect(await tables(db)).toEqual(fullSchema.filter((t) => t !== "live_events"));
+    expect(await tables(db)).toEqual(without0003);
     expect(await appliedCount(db)).toBe(3);
-    expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
+    expect(await indexes(db)).toEqual(gameIndexes);
 
     // 0002 down: the unique indexes go, the tables stay.
     expect(await rollbackLatest(db)).toBe("0002_unique_questions_answers");
     expect(await indexes(db)).toEqual([]);
-    expect(await tables(db)).toEqual(fullSchema.filter((t) => t !== "live_events"));
+    expect(await tables(db)).toEqual(without0003);
     expect(await appliedCount(db)).toBe(2);
 
     // Data in tables owned by 0000 must survive rolling back 0001.
@@ -86,13 +107,14 @@ describe("reversible migration (F5)", () => {
 
     await runMigrations();
     expect(await tables(db)).toEqual(fullSchema);
-    expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
-    expect(await appliedCount(db)).toBe(4);
+    expect(await hasReturnTo()).toBe(true);
+    expect(await appliedCount(db)).toBe(5);
   });
 
   it("0002 upgrades a database that already holds duplicate questions (as staging/prod did)", async () => {
     const { db, runMigrations } = await freshDb();
     await runMigrations();
+    await rollbackLatest(db); // 0004
     await rollbackLatest(db); // 0003
     await rollbackLatest(db); // 0002: back to the pre-0002 schema the deployed databases had
 
@@ -112,12 +134,18 @@ describe("reversible migration (F5)", () => {
     // Hand-predicted: unreferenced copies 1 and 3 are cleared; answered copy 2 is kept.
     const { rows } = await db.execute<{ id: number }>(sql`SELECT id FROM questions ORDER BY id`);
     expect(rows.map((r) => Number(r.id))).toEqual([2]);
-    expect(await indexes(db)).toEqual(["answers_session_question_uq", "questions_category_prompt_uq"]);
+    expect(await indexes(db)).toEqual([
+      "answers_session_question_uq",
+      "oauth_codes_hash_uq",
+      "oauth_refresh_hash_uq",
+      "questions_category_prompt_uq",
+    ]);
   });
 
   it("refuses to roll back a migration that has no down file", async () => {
     const { db, runMigrations } = await freshDb();
     await runMigrations();
+    await rollbackLatest(db); // 0004 has a down file
     await rollbackLatest(db); // 0003 has a down file
     await rollbackLatest(db); // 0002 has a down file
     await rollbackLatest(db); // 0001 has a down file

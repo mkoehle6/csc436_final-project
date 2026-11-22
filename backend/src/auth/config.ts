@@ -33,6 +33,22 @@ export const authConfig = {
   sessionTtlMs: 7 * 24 * 60 * 60 * 1000,
   loginStateTtlMs: 10 * 60 * 1000,
 
+  /**
+   * MCP (F12): the canonical resource URI of the MCP server (RFC 8707). Tokens for
+   * MCP clients carry it as `aud`, so they can never be used on the web API, and
+   * web-app tokens (aud "trivianerd-api") are never accepted by /mcp.
+   */
+  get mcpResource() {
+    return process.env.MCP_RESOURCE_URL ?? `${this.issuer}/mcp`;
+  },
+  mcp: {
+    accessTokenTtlSeconds: 15 * 60,
+    refreshTokenTtlMs: 30 * 24 * 60 * 60 * 1000,
+    authorizationCodeTtlMs: 10 * 60 * 1000,
+    /** Lifetime of the signed consent request carried by the consent form. */
+    consentRequestTtlSeconds: 10 * 60,
+  },
+
   google: {
     get clientId() {
       return required("GOOGLE_CLIENT_ID");

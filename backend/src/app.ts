@@ -4,11 +4,23 @@ import { pinoHttp } from "pino-http";
 import { ApiError, ApiErrors } from "./lib/errors.js";
 import { isAllowedOrigin } from "./lib/origins.js";
 import { authRouter } from "./routes/auth.js";
+import { oauthRouter } from "./routes/oauth.js";
 import { healthRouter } from "./routes/health.js";
 import { questionsRouter } from "./routes/questions.js";
 import { sessionsRouter } from "./routes/sessions.js";
 import { liveRouter } from "./routes/live.js";
 import { limits } from "./middleware/rateLimit.js";
+
+/** Machine-facing OAuth/MCP endpoints that get "*" CORS without credentials (see below). */
+const PUBLIC_MACHINE_ENDPOINTS = new Set([
+  "/.well-known/oauth-protected-resource",
+  "/.well-known/oauth-protected-resource/mcp",
+  "/.well-known/oauth-authorization-server",
+  "/.well-known/jwks.json",
+  "/auth/oauth/token",
+  "/mcp",
+]);
+const isPublicMachineEndpoint = (path: string) => PUBLIC_MACHINE_ENDPOINTS.has(path);
 
 export function createApp() {
   const app = express();
@@ -29,8 +41,36 @@ export function createApp() {
   app.use(express.json());
   app.use(cookieParser());
 
+  // D7 exception, deliberately narrow: endpoints that MCP clients call from any
+  // origin (some, like MCP Inspector, run in a browser). They authenticate with
+  // bearer tokens or nothing at all — never cookies — so "*" is safe here
+  // because credentials are NOT allowed. Everything else uses the allowlist below.
+  app.use((req, res, next) => {
+    if (!isPublicMachineEndpoint(req.path)) {
+      next();
+      return;
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Authorization,Content-Type,Accept,Mcp-Protocol-Version,Mcp-Session-Id,Last-Event-ID",
+    );
+    res.setHeader("Access-Control-Expose-Headers", "WWW-Authenticate,Mcp-Session-Id");
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+    res.locals.publicCors = true;
+    next();
+  });
+
   // D7: exact-origin CORS allowlist (lib/origins.ts) — never "*" with credentials.
   app.use((req, res, next) => {
+    if (res.locals.publicCors) {
+      next();
+      return;
+    }
     const origin = req.header("origin");
     if (isAllowedOrigin(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin);
@@ -60,6 +100,7 @@ export function createApp() {
 
   app.use(healthRouter);
   app.use(authRouter);
+  app.use(oauthRouter);
   app.use(
     "/api",
     limits.api(), // backstop; stricter per-class limits are on the routes (S1)

@@ -114,8 +114,72 @@ export const oauthLoginStates = pgTable("oauth_login_states", {
   nonce: text("nonce").notNull(),
   codeVerifier: text("code_verifier").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  /**
+   * Where to continue after Google login when the login was started by an MCP
+   * client's authorization request (an /auth/oauth/authorize path on this server;
+   * never an arbitrary URL). Null for ordinary web-app logins.
+   */
+  returnTo: text("return_to"),
   createdAt: createdAt(),
 });
+
+/**
+ * OAuth authorization codes issued to MCP clients (F12). Stored hashed and
+ * single-use: `used_at` is set when exchanged, and a second exchange attempt
+ * revokes every refresh token issued from the code (RFC 9700 code-reuse defence).
+ */
+export const oauthAuthorizationCodes = pgTable(
+  "oauth_authorization_codes",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    codeHash: text("code_hash").notNull(),
+    clientId: text("client_id").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    scope: text("scope").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    resource: text("resource").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  // The token endpoint looks codes up by hash.
+  (table) => [uniqueIndex("oauth_codes_hash_uq").on(table.codeHash)],
+);
+
+/**
+ * Refresh tokens issued to MCP clients. Stored hashed; rotated on every use.
+ * All tokens descending from one authorization code share `family_id`, so
+ * presenting an already-rotated token revokes the whole family (reuse detection).
+ */
+export const oauthRefreshTokens = pgTable(
+  "oauth_refresh_tokens",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tokenHash: text("token_hash").notNull(),
+    familyId: integer("family_id")
+      .notNull()
+      .references(() => oauthAuthorizationCodes.id),
+    clientId: text("client_id").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    replacedAt: timestamp("replaced_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    // Refresh requests look tokens up by hash.
+    uniqueIndex("oauth_refresh_hash_uq").on(table.tokenHash),
+    // Reuse detection revokes by family.
+    index("oauth_refresh_family_idx").on(table.familyId),
+  ],
+);
 
 /**
  * Server-side login sessions behind the httpOnly refresh cookie. Only the

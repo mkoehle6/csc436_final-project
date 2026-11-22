@@ -24,6 +24,22 @@ const ROLE_SCOPES: Record<Role, string[]> = {
   operator: [SCOPES.read, SCOPES.play, SCOPES.writeQuestions],
 };
 
+/**
+ * Scopes an MCP client may request (F12). Same names as the web-app scopes, but
+ * MCP tokens carry only what the user consented to, capped by their role.
+ */
+export const MCP_SCOPES = [SCOPES.read, SCOPES.play, SCOPES.writeQuestions] as const;
+
+/** Advertised as `scopes_supported` in resource metadata: the minimum for basic use (spec 2026-07-28). */
+export const MCP_BASIC_SCOPES: readonly string[] = [SCOPES.read, SCOPES.play];
+
+/** Plain-language descriptions shown on the consent screen. */
+export const SCOPE_DESCRIPTIONS: Record<string, string> = {
+  [SCOPES.read]: "See the leaderboard, sample questions and your own game stats",
+  [SCOPES.play]: "Play trivia games and record answers under your account",
+  [SCOPES.writeQuestions]: "Add questions to the question bank (operators only)",
+};
+
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);
 }
