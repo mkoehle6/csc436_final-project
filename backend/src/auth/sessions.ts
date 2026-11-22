@@ -39,8 +39,32 @@ export async function consumeLoginState(state: string) {
   return { nonce: row.nonce, codeVerifier: row.codeVerifier, returnTo: row.returnTo };
 }
 
-/** Finds the user for a Google identity, creating a `viewer` on first login. */
+/**
+ * Finds the user for a Google identity, creating a `viewer` on first login, then
+ * applies the bootstrap operator list (environments where no shell can run
+ * `npm run user:set-role`, e.g. a free staging instance).
+ */
 export async function upsertUser(identity: GoogleIdentity) {
+  return applyBootstrapOperator(await findOrCreateUser(identity));
+}
+
+type UserRow = typeof users.$inferSelect;
+
+async function applyBootstrapOperator(user: UserRow): Promise<UserRow> {
+  if (user.role === "operator" || !authConfig.bootstrapOperatorEmails.includes(user.email.toLowerCase())) return user;
+  const [promoted] = await db.update(users).set({ role: "operator" }).where(eq(users.id, user.id)).returning();
+  await recordAudit({
+    actorUserId: null, // the system, on the operator's instruction via configuration
+    action: "user.role_change",
+    entityType: "user",
+    entityId: user.id,
+    before: { role: user.role },
+    after: { role: "operator", reason: "BOOTSTRAP_OPERATOR_EMAILS" },
+  });
+  return promoted ?? user;
+}
+
+async function findOrCreateUser(identity: GoogleIdentity): Promise<UserRow> {
   const existing = await db.query.users.findFirst({ where: eq(users.oidcSubject, identity.subject) });
   if (existing) {
     if (existing.email !== identity.email || existing.displayName !== identity.displayName) {

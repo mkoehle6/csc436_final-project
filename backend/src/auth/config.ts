@@ -25,6 +25,17 @@ export const authConfig = {
   get appBaseUrl() {
     return process.env.APP_BASE_URL ?? "http://localhost:5173";
   },
+  /**
+   * F9: emails promoted to operator when they sign in (verified Google email).
+   * Set in the hosting platform's environment, never in the repo. Only promotes:
+   * removing an email does not demote; that stays a deliberate admin action.
+   */
+  get bootstrapOperatorEmails(): string[] {
+    return (process.env.BOOTSTRAP_OPERATOR_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+  },
   /** Cookies get `Secure` whenever the backend itself is served over HTTPS. */
   get secureCookies() {
     return this.issuer.startsWith("https://");

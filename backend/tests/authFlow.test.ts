@@ -225,4 +225,45 @@ describe("Google login flow (F7)", () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("UNAUTHORIZED");
   });
+
+  // Nested: shares the fake-Google server and the fresh app/db from the hooks above.
+  describe("bootstrap operator list (F9, BOOTSTRAP_OPERATOR_EMAILS)", () => {
+    afterEach(() => {
+      delete process.env.BOOTSTRAP_OPERATOR_EMAILS;
+    });
+
+    const signInAndGetUser = async () => {
+      const { session } = await completeLogin();
+      const res = await request(app).post("/auth/token").set("Origin", APP).set("Cookie", `tn_session=${session}`);
+      return res.body as { user: { role: string }; scope: string };
+    };
+    const roleChanges = async () =>
+      (await db.execute<{ actor: number | null; after: { role: string; reason: string } }>(
+        sql`SELECT actor_user_id AS actor, after FROM audit_log WHERE action = 'user.role_change' ORDER BY id`,
+      )).rows;
+
+    it("promotes a listed, Google-verified email to operator on sign-in (case-insensitive) and audits it", async () => {
+      process.env.BOOTSTRAP_OPERATOR_EMAILS = " someone@else.example , HOMER@example.com ";
+      const body = await signInAndGetUser();
+      expect(body.user.role).toBe("operator");
+      expect(body.scope).toBe("trivia:read trivia:play questions:write");
+      expect(await roleChanges()).toEqual([{ actor: null, after: { role: "operator", reason: "BOOTSTRAP_OPERATOR_EMAILS" } }]);
+    });
+
+    it("leaves unlisted users as viewers", async () => {
+      process.env.BOOTSTRAP_OPERATOR_EMAILS = "someone@else.example";
+      expect((await signInAndGetUser()).user.role).toBe("viewer");
+      expect(await roleChanges()).toEqual([]);
+    });
+
+    it("promotes an existing viewer at their next sign-in, once; removing the email does not demote", async () => {
+      expect((await signInAndGetUser()).user.role).toBe("viewer"); // first sign-in, not listed
+      process.env.BOOTSTRAP_OPERATOR_EMAILS = "homer@example.com";
+      expect((await signInAndGetUser()).user.role).toBe("operator");
+      expect((await signInAndGetUser()).user.role).toBe("operator"); // no second promotion
+      expect(await roleChanges()).toHaveLength(1);
+      delete process.env.BOOTSTRAP_OPERATOR_EMAILS;
+      expect((await signInAndGetUser()).user.role).toBe("operator"); // demotion stays a deliberate act
+    });
+  });
 });

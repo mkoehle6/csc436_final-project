@@ -146,6 +146,13 @@ npm run dev             # http://localhost:5173
   scope-checked on the server (a read-only connection gets 403 for the game, the
   answers and the UI), answers go through the same code path as the website
   (`backend/src/lib/gameplay.ts`: transaction, audit `via: "mcp"`, live leaderboard).
+- **Making someone an operator (F9):** locally, `npm run user:set-role -- <email> operator`
+  after they have signed in once. On Render the databases are private and the free
+  staging instance has no shell, so instead set `BOOTSTRAP_OPERATOR_EMAILS` (comma-separated)
+  on the backend service in the Render dashboard (it holds real emails, so it is never in
+  `render.yaml` or the repo). A listed, Google-verified email is promoted to operator at its
+  next Google sign-in, audited as `user.role_change` (actor: system). It only promotes;
+  removing an email does not demote.
 - **Rollback:** `npm run db:rollback` reverses the latest migration using
   `backend/src/db/migrations-down/<tag>.down.sql`.
 - **Third-party integration:** `backend/src/integrations/simpsonsApi.ts`
