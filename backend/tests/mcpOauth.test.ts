@@ -344,6 +344,41 @@ describe("token endpoint", () => {
   });
 });
 
+describe("published client document for MCP Inspector", () => {
+  it("is a valid CIMD document for this environment, redirecting only to Inspector's local callback", async () => {
+    const res = await request(app).get("/oauth/clients/mcp-inspector.json");
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      client_id: `${TEST_ISSUER}/oauth/clients/mcp-inspector.json`,
+      client_name: "MCP Inspector (local)",
+      redirect_uris: ["http://localhost:6274/oauth/callback"],
+      token_endpoint_auth_method: "none",
+    });
+  });
+
+  it("passes our own CIMD validation and gets a consent screen with the localhost warning", async () => {
+    // Deployed, the document lives at https://<api host>/oauth/clients/mcp-inspector.json;
+    // here the same body is served at an https test URL with client_id set to match.
+    const docUrl = "https://api.example.test/oauth/clients/mcp-inspector.json";
+    const body = (await request(app).get("/oauth/clients/mcp-inspector.json")).body as Record<string, unknown>;
+    const inspectorDoc = { ...body, client_id: docUrl };
+    const previous = global.fetch;
+    global.fetch = vi.fn(async (input: string | URL | Request) =>
+      String(input instanceof Request ? input.url : input) === docUrl
+        ? new Response(JSON.stringify(inspectorDoc), { status: 200, headers: { "Content-Type": "application/json" } })
+        : previous(input),
+    ) as unknown as typeof fetch;
+
+    const { cookie } = await signedIn();
+    const page = await request(app)
+      .get(authorizePath({ client_id: docUrl, redirect_uri: "http://localhost:6274/oauth/callback" }))
+      .set("Cookie", cookie);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("MCP Inspector (local)");
+    expect(page.text).toContain("Only allow it if you started it yourself"); // localhost warning
+  });
+});
+
 describe("CIMD SSRF guard", () => {
   it.each([
     ["127.0.0.1", true], ["10.1.2.3", true], ["172.20.0.1", true], ["192.168.1.1", true],

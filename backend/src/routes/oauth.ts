@@ -57,6 +57,31 @@ oauthRouter.get(["/.well-known/oauth-protected-resource", "/.well-known/oauth-pr
   res.json(resourceMetadata());
 });
 
+/**
+ * A Client ID Metadata Document for MCP Inspector (the official MCP debugging
+ * tool). Inspector runs on the developer's machine, so it cannot publish its own
+ * document; we publish one for it. Its client_id is this URL on the current
+ * environment, and it may only redirect to Inspector's local callback, so the
+ * consent screen shows the localhost warning. Enter this URL in Inspector under
+ * "Use Client ID Metadata Document".
+ */
+export const INSPECTOR_CLIENT_PATH = "/oauth/clients/mcp-inspector.json";
+export const INSPECTOR_REDIRECT_URIS = ["http://localhost:6274/oauth/callback"];
+
+oauthRouter.get(INSPECTOR_CLIENT_PATH, (_req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.json({
+    client_id: `${authConfig.issuer}${INSPECTOR_CLIENT_PATH}`,
+    client_name: "MCP Inspector (local)",
+    client_uri: "https://github.com/modelcontextprotocol/inspector",
+    redirect_uris: INSPECTOR_REDIRECT_URIS,
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+    application_type: "native",
+  });
+});
+
 oauthRouter.get("/.well-known/oauth-authorization-server", (_req, res) => {
   const issuer = authConfig.issuer;
   res.setHeader("Cache-Control", "public, max-age=3600");
