@@ -123,6 +123,20 @@ npm run dev             # http://localhost:5173
   tokens have `aud` = the MCP URL and are refused by the web API (and vice versa);
   scopes are capped by role; refresh tokens rotate, and code or refresh-token reuse
   revokes the whole token family.
+- **MCP server (F12, phase 2):** Streamable HTTP at `/mcp` (official TypeScript SDK v2,
+  stateless: a fresh server per request, bound to the caller from the validated token).
+
+  | Tool | Scope | Notes |
+  | --- | --- | --- |
+  | `get_leaderboard` | `trivia:read` | nicknames only |
+  | `get_random_questions` | `trivia:read` | no correct answers |
+  | `get_my_stats` | `trivia:read` | caller's own results |
+  | `add_question` | `questions:write` + operator role | **requires confirmation**: first call creates nothing and returns a preview + 5-minute single-use code bound to the user and the exact payload |
+
+  No/invalid/wrong-audience token → **401** with `WWW-Authenticate: Bearer resource_metadata="…"`;
+  a token without a tool's scope → **403** `error="insufficient_scope", scope="…"`. The role is
+  re-checked at call time. Every tool call, including refused ones, is audited
+  (`mcp.tool_call`, confirmation codes redacted). 120 calls/min per MCP user.
 - **Rollback:** `npm run db:rollback` reverses the latest migration using
   `backend/src/db/migrations-down/<tag>.down.sql`.
 - **Third-party integration:** `backend/src/integrations/simpsonsApi.ts`
@@ -217,7 +231,11 @@ production" → Run workflow** (tick *dry run* to only check). For each service,
 backend first, it deploys exactly the commit **staging** is running, and only if
 staging is healthy and CI passed for that commit; it then waits until production
 reports that commit (`/healthz` `commit`, frontend `<meta name="app-commit">`)
-and writes a before/after table to the run summary. Logic:
+and writes a before/after table to the run summary. It **never moves production
+backwards**: if staging runs an older commit than production, that service is refused
+(a rollback is a separate, deliberate action). If `main` has app changes that have
+not reached staging yet (CI or the staging deploy still running), the summary shows
+a ⚠️ warning saying to wait and run Promote again. Logic:
 [`scripts/promote.mjs`](scripts/promote.mjs).
 
 One-time setup: in Render, copy each production service's **Settings → Deploy

@@ -225,6 +225,31 @@ export const liveEvents = pgTable(
 );
 
 /**
+ * Pending MCP write actions awaiting the user's confirmation (F12). The first
+ * add_question call stores the exact payload here and returns a short code; only
+ * a second call by the same user, with the same payload and the code, performs
+ * the write. Codes are stored hashed, expire after 5 minutes and work once.
+ */
+export const mcpPendingActions = pgTable(
+  "mcp_pending_actions",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    codeHash: text("code_hash").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    action: text("action").notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    payload: jsonb("payload").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  // Confirmation looks the code up by hash.
+  (table) => [uniqueIndex("mcp_pending_code_uq").on(table.codeHash)],
+);
+
+/**
  * Append-only audit trail (F6): who (actor from validated token), what (action +
  * entity), when, and before/after state as JSON snapshots.
  */

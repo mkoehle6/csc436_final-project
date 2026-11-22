@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { closeDb } from "./db/client.js";
 import { warmUp } from "./lib/questionBank.js";
 import { closeAllStreams } from "./routes/live.js";
+import { closeMcp } from "./routes/mcp.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const app = createApp();
@@ -36,6 +37,7 @@ function shutdown(signal: string) {
   // Open SSE streams would hold server.close() open; ending them lets clients
   // reconnect (with Last-Event-ID) to the next instance and resume (F11).
   closeAllStreams();
+  void closeMcp().catch(() => undefined);
   server.close(() => {
     closeDb()
       .catch((err: unknown) => console.error("error closing database", err))

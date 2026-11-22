@@ -5,6 +5,7 @@ import { ApiError, ApiErrors } from "./lib/errors.js";
 import { isAllowedOrigin } from "./lib/origins.js";
 import { authRouter } from "./routes/auth.js";
 import { oauthRouter } from "./routes/oauth.js";
+import { mcpRouter } from "./routes/mcp.js";
 import { healthRouter } from "./routes/health.js";
 import { questionsRouter } from "./routes/questions.js";
 import { sessionsRouter } from "./routes/sessions.js";
@@ -101,6 +102,7 @@ export function createApp() {
   app.use(healthRouter);
   app.use(authRouter);
   app.use(oauthRouter);
+  app.use(mcpRouter);
   app.use(
     "/api",
     limits.api(), // backstop; stricter per-class limits are on the routes (S1)
