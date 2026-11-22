@@ -37,6 +37,10 @@ function send(res: Response, status: number, title: string, body: string, formAc
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Frame-Options", "DENY");
+  // Not the app-wide "no-referrer": under that policy browsers send `Origin: null`
+  // on this page's own form POST, which the consent CSRF check would then reject.
+  // same-origin still sends nothing to other sites.
+  res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader(
     "Content-Security-Policy",
     // form-action must also allow the client's redirect origin: browsers apply it to

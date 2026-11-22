@@ -111,6 +111,19 @@ function redirectWith(res: Response, redirectUri: string, params: Record<string,
   res.redirect(302, url.toString());
 }
 
+/**
+ * Was this POST submitted by a page on our own origin? Primary signal: the Origin
+ * header. Some browsers send `Origin: null` for form posts (e.g. under a
+ * no-referrer policy), so when Origin is absent or "null" we accept the
+ * browser-set Sec-Fetch-Site: same-origin, which a web page cannot forge.
+ * Anything else, including any cross-site request, is refused.
+ */
+function isSameOriginFormPost(req: Request): boolean {
+  const origin = req.header("origin");
+  if (origin && origin !== "null") return origin === new URL(authConfig.issuer).origin;
+  return req.header("sec-fetch-site") === "same-origin";
+}
+
 async function currentUser(req: Request) {
   const token: unknown = req.cookies?.[SESSION_COOKIE];
   if (typeof token !== "string" || !token) return null;
@@ -213,7 +226,7 @@ oauthRouter.post("/auth/oauth/authorize", authorizeLimiter, formBody, async (req
   try {
     // CSRF: the session cookie is SameSite=Lax (not sent on cross-site POSTs),
     // the form must come from our own origin, and the request token is bound to the user.
-    if (req.header("origin") !== new URL(authConfig.issuer).origin) {
+    if (!isSameOriginFormPost(req)) {
       renderError(res, 403, "This form must be submitted from TriviaNerd itself.");
       return;
     }

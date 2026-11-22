@@ -231,6 +231,26 @@ describe("authorize: sign-in and consent", () => {
     expect(tampered.status).toBe(400);
   });
 
+  it("works with real browser behaviour: Origin null + Sec-Fetch-Site same-origin is accepted, cross-site is not", async () => {
+    // Regression: staging's consent form failed because the page was served with
+    // Referrer-Policy: no-referrer, making the browser send `Origin: null`.
+    const { cookie } = await signedIn();
+    const post = async (headers: Record<string, string>) => {
+      const page = await request(app).get(authorizePath()).set("Cookie", cookie);
+      expect(page.headers["referrer-policy"]).toBe("same-origin");
+      const token = /name="request" value="([^"]+)"/.exec(page.text)![1]!;
+      return request(app).post("/auth/oauth/authorize").set("Cookie", cookie).set(headers).type("form").send({ request: token, decision: "allow" });
+    };
+
+    const browserLike = await post({ Origin: "null", "Sec-Fetch-Site": "same-origin" });
+    expect(browserLike.status).toBe(302);
+    expect(new URL(browserLike.headers.location!).searchParams.get("code")).toBeTruthy();
+
+    expect((await post({ Origin: "null", "Sec-Fetch-Site": "cross-site" })).status).toBe(403);
+    expect((await post({ "Sec-Fetch-Site": "same-site" })).status).toBe(403); // a sibling subdomain is not us
+    expect((await post({})).status).toBe(403); // no evidence of origin at all
+  });
+
   it("refuses a consent request signed for a different user", async () => {
     const alice = await signedIn();
     const bob = await signedIn();
