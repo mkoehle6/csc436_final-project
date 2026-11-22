@@ -29,6 +29,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0 # full history, to see which files a push changed
+
+      # Blueprint auto-sync is OFF in Render (see README, "Changing render.yaml"):
+      # a render.yaml change takes effect only after a Manual Sync, so make it
+      # impossible to miss.
+      - name: Flag render.yaml changes (Manual Sync needed)
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if git cat-file -e "${BEFORE}^{commit}" 2>/dev/null && git diff --name-only "$BEFORE" "$GITHUB_SHA" -- render.yaml | grep -q .; then
+            echo "::warning title=render.yaml changed::Apply it in Render with Blueprint Manual Sync, after the code it needs is on staging AND production (auto-sync is off)."
+            echo "### ⚠️ render.yaml changed: run Blueprint **Manual Sync** in Render once the code it needs is on staging and production." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/setup-node@v7
         with:

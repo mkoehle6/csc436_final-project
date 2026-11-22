@@ -252,6 +252,23 @@ Hook** URL into a GitHub repository secret (**Settings → Secrets and variables
 Actions**): `RENDER_DEPLOY_HOOK_API_PROD` and `RENDER_DEPLOY_HOOK_WEB_PROD`.
 The URLs are secrets: anyone holding one can trigger a deploy.
 
+### Changing `render.yaml` (Blueprint auto-sync is off)
+
+**Incident, 2026-11-22:** commit `cbdd728` changed `render.yaml`. With Blueprint
+auto-sync on, Render applied it to *every* service immediately, so the **production
+backend redeployed at 21:39 UTC, before CI passed (21:43) and before staging**,
+bypassing `autoDeployTrigger: off` and the Promote workflow. No harm resulted (CI
+passed), but it broke the staging-first rule. It was caught by our own checks:
+`/healthz` reports the commit, and the Promote summary showed production already
+on it.
+
+**Fix:** Blueprint **Auto Sync is off** in Render. Ordinary code changes still flow
+CI → staging → Promote. A `render.yaml` change takes effect only after a
+deliberate **Manual Sync** (Render → Blueprints → TriviaNerd → Manual Sync), and
+CI flags every push that changes it. Because one sync applies to both environments,
+keep such changes small, and sync only after the code they depend on is already on
+staging *and* production.
+
 Migrations run automatically: on staging (free instance) at start, before the
 server listens; on production via `preDeployCommand`, so a failing migration
 fails the deploy while the previous version keeps serving.
