@@ -1,3 +1,4 @@
+import { RESOURCE_MIME_TYPE, RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 import { McpServer, requireScopes, type CallToolResult, type ScopeChallengeHandler } from "@modelcontextprotocol/server";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -5,9 +6,11 @@ import { SCOPES } from "../auth/scopes.js";
 import { db } from "../db/client.js";
 import { answers, gameSessions, questions, users } from "../db/schema.js";
 import { recordAudit } from "../lib/audit.js";
+import { recordAnswer, startGameSession } from "../lib/gameplay.js";
 import { getRound } from "../lib/questionBank.js";
 import { leaderboard } from "../live/leaderboard.js";
 import { nicknameFor } from "../live/nickname.js";
+import { QUIZ_UI_META, QUIZ_URI, quizHtml } from "./app.js";
 import { auditToolCall, type ToolOutcome } from "./audit.js";
 import type { McpCaller } from "./caller.js";
 import { CONFIRMATION_TTL_MS, consumeConfirmation, createConfirmation } from "./confirmations.js";
@@ -18,6 +21,8 @@ import { CONFIRMATION_TTL_MS, consumeConfirmation, createConfirmation } from "./
  * Read tools (scope trivia:read): get_leaderboard, get_random_questions, get_my_stats.
  * Write tool (scope questions:write + operator role): add_question, which requires
  * a server-enforced confirmation step (mcp/confirmations.ts).
+ * MCP App (F13, scope trivia:play): play_trivia opens the quiz UI
+ * (ui://trivianerd/quiz.html); submit_answer is called by that UI only.
  *
  * Tools call application functions directly; the caller's token is never passed on.
  */
@@ -221,6 +226,92 @@ export function buildMcpServer(caller: McpCaller): McpServer {
       });
       return { outcome: "ok", result: result(`Created question #${created.id}.`, { status: "created", questionId: created.id }) };
     }),
+  );
+
+  // ── F13: the MCP App ─────────────────────────────────────────────────────
+
+  server.registerResource(
+    "trivianerd_quiz",
+    QUIZ_URI,
+    {
+      title: "TriviaNerd quiz",
+      description: "Interactive TriviaNerd quiz (MCP App).",
+      mimeType: RESOURCE_MIME_TYPE,
+      _meta: QUIZ_UI_META,
+      scopeChallenge: requireScopes(SCOPES.play),
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: RESOURCE_MIME_TYPE, text: quizHtml(), _meta: QUIZ_UI_META }],
+    }),
+  );
+
+  server.registerTool(
+    "play_trivia",
+    {
+      title: "Play TriviaNerd",
+      description:
+        "Starts a scored TriviaNerd game for the user and shows an interactive quiz. The user answers in the quiz " +
+        "itself; results count on the TriviaNerd live leaderboard. Do not answer the questions for the user.",
+      inputSchema: z.object({ count: z.number().int().min(1).max(10).default(5).describe("Number of questions (1-10)") }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      scopeChallenge: scope("play_trivia", SCOPES.play),
+      // MCP Apps: the host renders this resource for the tool's result (plus the
+      // deprecated flat key for older hosts, as the ext-apps helper does).
+      _meta: { ui: { resourceUri: QUIZ_URI }, [RESOURCE_URI_META_KEY]: QUIZ_URI },
+    },
+    audited("play_trivia", async ({ count: n }: { count: number }) => {
+      const round = await getRound("character", n);
+      if (round.questions.length === 0) {
+        return { outcome: "error", result: failure("No questions are available right now. Try again in a minute.") };
+      }
+      const session = await startGameSession(caller.userId, "mcp");
+      const game = { sessionId: session.id, player: nicknameFor(caller.userId), questions: round.questions };
+      return {
+        outcome: "ok",
+        result: result(
+          `Started TriviaNerd game #${session.id} with ${round.questions.length} questions for ${game.player}. ` +
+            "The user plays in the quiz shown above; do not reveal or guess answers.",
+          game,
+        ),
+      };
+    }),
+  );
+
+  server.registerTool(
+    "submit_answer",
+    {
+      title: "Submit a quiz answer",
+      description: "Scores one answer in the user's TriviaNerd game. Called by the TriviaNerd quiz app.",
+      inputSchema: z.object({
+        sessionId: z.number().int().positive(),
+        questionId: z.number().int().positive(),
+        selectedAnswer: z.string().min(1).max(500),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      scopeChallenge: scope("submit_answer", SCOPES.play),
+      // App-only: hosts hide it from the model and only let the quiz call it. That is a
+      // host-side safeguard; the server still enforces scope and session ownership.
+      _meta: { ui: { visibility: ["app"] } },
+    },
+    audited(
+      "submit_answer",
+      async ({ sessionId, questionId, selectedAnswer }: { sessionId: number; questionId: number; selectedAnswer: string }) => {
+        const outcome = await recordAnswer(caller.userId, sessionId, questionId, selectedAnswer, "mcp");
+        if (!outcome.ok) {
+          const message = {
+            session_not_found: "That game was not found.",
+            question_not_found: "That question was not found.",
+            already_answered: "That question was already answered in this game.",
+          }[outcome.reason];
+          return { outcome: "error", result: failure(message) };
+        }
+        const { isCorrect, correctAnswer, score } = outcome;
+        return {
+          outcome: "ok",
+          result: result(isCorrect ? "Correct!" : `Not quite. The answer is ${correctAnswer}.`, { isCorrect, correctAnswer, score }),
+        };
+      },
+    ),
   );
 
   return server;

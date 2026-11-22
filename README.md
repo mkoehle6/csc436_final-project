@@ -10,8 +10,8 @@ application requirements checklist (F1–F13, D1–D11, S1–S2, Q1–Q4).
 ```
 frontend/     React + TypeScript (Vite) client — the TriviaNerd UI
 backend/      Express + TypeScript REST API, PostgreSQL + Drizzle ORM, OIDC auth
-mcp-server/   MCP server (read/write tools, OAuth-protected) — planned
-mcp-app/      Interactive MCP App (React/TS) — planned
+mcp-app/      MCP App (F13): React/TS quiz built into one HTML file, served by the backend
+              (the MCP server itself lives in backend/src/mcp and is served at /mcp)
 infra/        Deployment config / IaC — planned
 docs/         Architecture + trust-boundary diagrams, runbook, postmortem
 ```
@@ -137,6 +137,15 @@ npm run dev             # http://localhost:5173
   a token without a tool's scope → **403** `error="insufficient_scope", scope="…"`. The role is
   re-checked at call time. Every tool call, including refused ones, is audited
   (`mcp.tool_call`, confirmation codes redacted). 120 calls/min per MCP user.
+- **MCP App (F13, phase 3):** `play_trivia` (scope `trivia:play`) starts a scored game
+  and points the host at the UI resource `ui://trivianerd/quiz.html`
+  (`text/html;profile=mcp-app`), the `mcp-app/` workspace built into one HTML file.
+  The quiz has no network access of its own (its CSP allows only images from the
+  Simpsons CDN); it scores answers by asking the host to call `submit_answer`
+  (app-only visibility) over the user's authenticated connection. Every call is
+  scope-checked on the server (a read-only connection gets 403 for the game, the
+  answers and the UI), answers go through the same code path as the website
+  (`backend/src/lib/gameplay.ts`: transaction, audit `via: "mcp"`, live leaderboard).
 - **Rollback:** `npm run db:rollback` reverses the latest migration using
   `backend/src/db/migrations-down/<tag>.down.sql`.
 - **Third-party integration:** `backend/src/integrations/simpsonsApi.ts`

@@ -2,38 +2,24 @@ import { Router } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { answers, auditLog, gameSessions, questions } from "../db/schema.js";
+import { answers, gameSessions } from "../db/schema.js";
 import { ApiErrors } from "../lib/errors.js";
+import { recordAnswer, startGameSession } from "../lib/gameplay.js";
 import { computeScore } from "../lib/scoring.js";
 import { SCOPES } from "../auth/scopes.js";
 import { actorUserId, requireAuth, requireScope } from "../middleware/auth.js";
 import { limits } from "../middleware/rateLimit.js";
-import { recordAudit } from "../lib/audit.js";
-import { notifyNewEvents, publishInTx, pruneOldEvents } from "../live/events.js";
-import { leaderboard } from "../live/leaderboard.js";
-import { nicknameFor } from "../live/nickname.js";
 
 export const sessionsRouter = Router();
 
 /** Starting sessions and submitting answers: counted per signed-in player (S1). */
 const playLimiter = limits.writes();
 
-/** Prune the live-event replay buffer every this many events. */
-const PRUNE_EVERY = 100;
-
 /** POST /api/sessions — start a new game session for the authenticated user. */
 sessionsRouter.post("/sessions", requireAuth, requireScope(SCOPES.play), playLimiter, async (req, res, next) => {
   try {
-    const userId = actorUserId(req);
-    const [created] = await db.insert(gameSessions).values({ userId }).returning();
-    await recordAudit({
-      actorUserId: userId,
-      action: "session.start",
-      entityType: "game_session",
-      entityId: created?.id,
-      after: created,
-    });
-    res.status(201).location(`/api/sessions/${created?.id}`).json(created);
+    const created = await startGameSession(actorUserId(req), "web");
+    res.status(201).location(`/api/sessions/${created.id}`).json(created);
   } catch (err) {
     next(err);
   }
@@ -44,17 +30,10 @@ const submitAnswerSchema = z.object({
   selectedAnswer: z.string().min(1),
 });
 
-/** Postgres unique_violation, as raised by node-postgres or PGlite (possibly wrapped by Drizzle). */
-function isUniqueViolation(err: unknown): boolean {
-  const code = (e: unknown) => (typeof e === "object" && e !== null ? (e as { code?: unknown }).code : undefined);
-  return code(err) === "23505" || code((err as { cause?: unknown } | null)?.cause) === "23505";
-}
-
 /**
- * POST /api/sessions/:id/answers — record one answer in the caller's session.
- * 404 if the session (or question) is missing or not theirs; 409 if this
- * question was already answered in the session. The answer, the session's
- * running score and the audit entry are written in one transaction.
+ * POST /api/sessions/:id/answers — record one answer in the caller's session
+ * (lib/gameplay.ts, shared with the MCP App). 404 if the session (or question)
+ * is missing or not theirs; 409 if this question was already answered.
  */
 sessionsRouter.post("/sessions/:id/answers", requireAuth, requireScope(SCOPES.play), playLimiter, async (req, res, next) => {
   const sessionId = Number(req.params.id);
@@ -69,60 +48,14 @@ sessionsRouter.post("/sessions/:id/answers", requireAuth, requireScope(SCOPES.pl
   }
 
   try {
-    const userId = actorUserId(req);
-    const session = await db.query.gameSessions.findFirst({
-      where: eq(gameSessions.id, sessionId),
-    });
-    // Someone else's session is reported as missing, so ids cannot be probed.
-    if (!session || session.userId !== userId) {
-      throw ApiErrors.notFound("Session not found");
+    const result = await recordAnswer(actorUserId(req), sessionId, parsed.data.questionId, parsed.data.selectedAnswer, "web");
+    if (!result.ok) {
+      if (result.reason === "already_answered") throw ApiErrors.conflict("This question was already answered in this session");
+      throw ApiErrors.notFound(result.reason === "session_not_found" ? "Session not found" : "Question not found");
     }
-    const question = await db.query.questions.findFirst({
-      where: eq(questions.id, parsed.data.questionId),
-    });
-    if (!question) {
-      throw ApiErrors.notFound("Question not found");
-    }
-
-    const isCorrect = parsed.data.selectedAnswer === question.correctAnswer;
-    const result = await db.transaction(async (tx) => {
-      const [created] = await tx
-        .insert(answers)
-        .values({ sessionId, questionId: question.id, selectedAnswer: parsed.data.selectedAnswer, isCorrect })
-        .returning();
-      const all = await tx.query.answers.findMany({ where: eq(answers.sessionId, sessionId) });
-      const score = computeScore(all.map((a) => ({ isCorrect: a.isCorrect })));
-      await tx.update(gameSessions).set({ score: score.points }).where(eq(gameSessions.id, sessionId));
-      await tx.insert(auditLog).values({
-        actorUserId: userId,
-        action: "answer.submit",
-        entityType: "answer",
-        entityId: created?.id,
-        before: { score: session.score },
-        after: { sessionId, questionId: question.id, isCorrect, score: score.points },
-      });
-      // F11: the live event is part of the same transaction as the answer, so it
-      // exists if and only if the answer does. Public payload: nickname only.
-      const eventId = await publishInTx(tx, "score", {
-        player: nicknameFor(userId),
-        isCorrect,
-        sessionPoints: score.points,
-        leaderboard: await leaderboard(tx),
-      });
-      return { answer: created, score, eventId };
-    });
-    notifyNewEvents(); // after commit: wake open streams
-    if (result.eventId % PRUNE_EVERY === 0) void pruneOldEvents(db).catch(() => undefined);
-
-    res
-      .status(201)
-      .location(`/api/sessions/${sessionId}`)
-      .json({ ...result, isCorrect, correctAnswer: question.correctAnswer });
+    const { answer, score, eventId, isCorrect, correctAnswer } = result;
+    res.status(201).location(`/api/sessions/${sessionId}`).json({ answer, score, eventId, isCorrect, correctAnswer });
   } catch (err) {
-    if (isUniqueViolation(err)) {
-      next(ApiErrors.conflict("This question was already answered in this session"));
-      return;
-    }
     next(err);
   }
 });

@@ -50,8 +50,9 @@ projects:
             branch: main
             autoDeployTrigger: checksPass
             buildFilter:
-              paths: ["backend/**", "package.json", "package-lock.json", "render.yaml"]
-            buildCommand: npm ci --workspace=backend && npm run build --workspace=backend
+              paths: ["backend/**", "mcp-app/**", "package.json", "package-lock.json", "render.yaml"]
+            # The backend also serves the MCP App (F13), built first into mcp-app/dist/quiz.html.
+            buildCommand: npm ci --workspace=backend --workspace=mcp-app && npm run build --workspace=mcp-app && npm run build --workspace=backend
             # Free instances cannot use preDeployCommand, so migrations run at start.
             # They are idempotent: already-applied migrations are skipped.
             startCommand: cd backend && npm run start:migrate && npm start
@@ -162,7 +163,8 @@ projects:
             plan: 0.5c-512mb # cheapest paid: no sleeping, so the SLO is meaningful
             branch: main
             autoDeployTrigger: off # promoted from staging only, via the Promote workflow's deploy hook
-            buildCommand: npm ci --workspace=backend && npm run build --workspace=backend
+            # The backend also serves the MCP App (F13), built first into mcp-app/dist/quiz.html.
+            buildCommand: npm ci --workspace=backend --workspace=mcp-app && npm run build --workspace=mcp-app && npm run build --workspace=backend
             # Paid instances run migrations on a separate instance *before* traffic
             # moves: a failing migration fails the deploy and the old version keeps serving.
             preDeployCommand: cd backend && npm run start:migrate

@@ -126,12 +126,19 @@ describe("authentication", () => {
 });
 
 describe("tools and scopes", () => {
-  it("lists the four tools with read-only annotations on the read tools", async () => {
+  it("lists the six tools with read-only annotations on the read tools", async () => {
     const u = await user();
     const client = await connect(await mcpToken(u.id, "viewer", "trivia:read"));
     const { tools } = await client.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
-    expect(Object.keys(byName).sort()).toEqual(["add_question", "get_leaderboard", "get_my_stats", "get_random_questions"]);
+    expect(Object.keys(byName).sort()).toEqual([
+      "add_question",
+      "get_leaderboard",
+      "get_my_stats",
+      "get_random_questions",
+      "play_trivia",
+      "submit_answer",
+    ]);
     expect(byName.get_leaderboard!.annotations?.readOnlyHint).toBe(true);
     expect(byName.add_question!.annotations?.readOnlyHint).toBe(false);
   });

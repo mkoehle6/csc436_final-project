@@ -6,13 +6,12 @@
   "workspaces": [
     "frontend",
     "backend",
-    "mcp-server",
     "mcp-app"
   ],
   "scripts": {
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
-    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "build": "npm run build --workspace=mcp-app && npm run build --workspace=backend && npm run build --workspace=frontend",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
     "typecheck": "npm run typecheck --workspaces --if-present",

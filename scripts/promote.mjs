@@ -101,7 +101,8 @@ const services = [
     staging: () => backendState(env("STAGING_API")),
     prod: () => backendState(env("PROD_API")),
     hook: () => env("RENDER_DEPLOY_HOOK_API_PROD"),
-    buildsOn: (file) => file.startsWith("backend/") || SHARED_PATHS.includes(file),
+    // The backend also serves the MCP App, so mcp-app/ changes rebuild it.
+    buildsOn: (file) => file.startsWith("backend/") || file.startsWith("mcp-app/") || SHARED_PATHS.includes(file),
   },
   {
     name: "frontend",
