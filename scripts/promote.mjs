@@ -92,20 +92,64 @@ async function waitForCommit(read, sha, label) {
   throw new Error(`${label} did not report ${short(sha)} within ${TIMEOUT_MS / 60_000} minutes`);
 }
 
+/** Paths whose changes trigger each service's build: same as buildFilter in render.yaml. */
+const SHARED_PATHS = ["package.json", "package-lock.json", "render.yaml"];
+
 const services = [
   {
     name: "backend",
     staging: () => backendState(env("STAGING_API")),
     prod: () => backendState(env("PROD_API")),
     hook: () => env("RENDER_DEPLOY_HOOK_API_PROD"),
+    buildsOn: (file) => file.startsWith("backend/") || SHARED_PATHS.includes(file),
   },
   {
     name: "frontend",
     staging: () => frontendState(env("STAGING_WEB")),
     prod: () => frontendState(env("PROD_WEB")),
     hook: () => env("RENDER_DEPLOY_HOOK_WEB_PROD"),
+    buildsOn: (file) => file.startsWith("frontend/") || SHARED_PATHS.includes(file),
   },
 ];
+
+async function github(path) {
+  const res = await fetchWithTimeout(`https://api.github.com/repos/${env("GITHUB_REPOSITORY")}${path}`, {
+    headers: { Authorization: `Bearer ${env("GITHUB_TOKEN")}`, Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) throw new Error(`GitHub API returned ${res.status} for ${path}`);
+  return res.json();
+}
+
+/** Status of the CI workflow for a commit, e.g. "in progress", "failure", "not started". */
+async function ciStatus(sha) {
+  const { workflow_runs: runs = [] } = await github(`/actions/runs?head_sha=${sha}&per_page=50`);
+  const run = runs.find((r) => r.name === "CI");
+  if (!run) return "not started";
+  return run.status === "completed" ? run.conclusion : run.status.replace("_", " ");
+}
+
+/**
+ * Warns when main has commits that change a service's files but have not reached
+ * staging yet (CI still running, deploy still in progress, or CI failed). Without
+ * this, a Promote started too early "succeeds" by promoting nothing. Commits that
+ * do not touch the service (docs, the other service) never reach staging by design
+ * (render.yaml buildFilter), so they are ignored rather than reported.
+ */
+async function behindMainWarning(svc, stagingSha) {
+  const head = process.env.GITHUB_SHA;
+  if (!head || !SHA_RE.test(head) || head === stagingSha) return null;
+  const compare = await github(`/compare/${stagingSha}...${head}`);
+  if (compare.status === "behind" || compare.status === "identical") return null;
+  const relevant = (compare.files ?? []).map((f) => f.filename).filter(svc.buildsOn);
+  if (relevant.length === 0) return null;
+  return (
+    `⚠️ ${svc.name}: \`main\` is at \`${short(head)}\` (CI: ${await ciStatus(head)}), which changes ` +
+    `${relevant.length} ${svc.name} file(s) that staging (\`${short(stagingSha)}\`) does not have yet. ` +
+    `Wait until staging runs \`${short(head)}\`, then run Promote again.`
+  );
+}
+
+const warnings = [];
 
 let failed = false;
 log(`## Promote staging → production${DRY_RUN ? " (dry run)" : ""}`);
@@ -132,9 +176,32 @@ for (const svc of services) {
     failed = true;
     continue;
   }
+  try {
+    const warning = await behindMainWarning(svc, stg.commit);
+    if (warning) warnings.push(warning);
+  } catch (err) {
+    warnings.push(`⚠️ ${svc.name}: could not compare staging with main (${err.message})`);
+  }
   if (prd.commit === stg.commit) {
     row("✅ already up to date");
     continue;
+  }
+  // Promotion only moves production forward. If staging runs an older commit than
+  // production (e.g. staging was rolled back), promoting would silently roll
+  // production back too; that must be a deliberate rollback, not a side effect.
+  if (prd.commit && SHA_RE.test(prd.commit)) {
+    try {
+      const { status } = await github(`/compare/${prd.commit}...${stg.commit}`);
+      if (status !== "ahead") {
+        row(`❌ staging is ${status === "behind" ? "older than" : "not ahead of"} production; refusing to move production backwards`);
+        failed = true;
+        continue;
+      }
+    } catch (err) {
+      row(`❌ could not confirm staging is newer than production (${err.message})`);
+      failed = true;
+      continue;
+    }
   }
   if (DRY_RUN) {
     row(`would deploy \`${short(stg.commit)}\``);
@@ -149,6 +216,11 @@ for (const svc of services) {
     failed = true;
     break; // never deploy the frontend if the backend promotion failed
   }
+}
+
+if (warnings.length > 0) {
+  log("");
+  for (const w of warnings) log(w);
 }
 
 if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary.join("\n") + "\n");
