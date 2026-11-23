@@ -24,6 +24,18 @@ describe("GET /healthz", () => {
     await close();
   });
 
+  it("sends the D7 security headers and does not advertise the framework", async () => {
+    const { app, close } = await freshAppWithDb();
+
+    const res = await request(app).get("/healthz");
+    expect(res.headers["x-powered-by"]).toBeUndefined();
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+    expect(res.headers["strict-transport-security"]).toBe("max-age=63072000; includeSubDomains; preload");
+    expect(res.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    await close();
+  });
+
   it("returns 503 when the database is unreachable, so Render will not route traffic to it", async () => {
     const { app, close } = await freshAppWithDb();
     await close(); // the database goes away

@@ -25,6 +25,8 @@ const isPublicMachineEndpoint = (path: string) => PUBLIC_MACHINE_ENDPOINTS.has(p
 
 export function createApp() {
   const app = express();
+  // D7: don't advertise the framework (seen in the outside header check).
+  app.disable("x-powered-by");
 
   // Behind Render's load balancer (and later a CDN) the TCP peer is the proxy, not
   // the visitor. TRUST_PROXY = number of proxy hops in front of the app, so req.ip
@@ -91,7 +93,7 @@ export function createApp() {
   app.use((_req, res, next) => {
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self'",
+      "default-src 'self'; img-src 'self' https://cdn.thesimpsonsapi.com data:; connect-src 'self'; frame-ancestors 'none'",
     );
     res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
     res.setHeader("X-Content-Type-Options", "nosniff");

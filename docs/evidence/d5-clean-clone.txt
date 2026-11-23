@@ -1,0 +1,28 @@
+# D5 clean-clone run
+date: 2026-11-23T01:58:16Z
+node: v24.21.0, npm: 11.19.0, os: MINGW64_NT-10.0-26300
+
+$ git clone https://github.com/mkoehle6/csc436_final-project.git && cd csc436_final-project
+commit: 08f9a17392899f3df50d122df581d394c829a4b4
+
+$ npm ci
+added 500 packages, and audited 504 packages in 9s
+99 packages are looking for funding
+
+$ npm run validate:render
+render.yaml is valid against https://render.com/schema/render.yaml.json
+
+$ npm run typecheck
+type errors: 0
+
+$ npm run lint
+(no lint findings if empty)
+
+$ npm test
+ Test Files  17 passed (17)
+      Tests  154 passed (154)
+
+$ npm run build
+dist/quiz.html  462.17 kB │ gzip: 131.65 kB
+[32m✓ built in 295ms[39m
+[32m✓ built in 198ms[39m
