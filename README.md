@@ -153,6 +153,12 @@ npm run dev             # http://localhost:5173
   `render.yaml` or the repo). A listed, Google-verified email is promoted to operator at its
   next Google sign-in, audited as `user.role_change` (actor: system). It only promotes;
   removing an email does not demote.
+- **Observability (D10):** OpenTelemetry (`backend/src/telemetry.ts`, loaded with
+  `node --import` by `npm start`) exports traces, metrics and logs over OTLP to Grafana
+  Cloud. One request's trace spans the API, Postgres (pg) and The Simpsons API (outbound
+  HTTP); pino logs carry `trace_id`; metrics include `http.server.request.duration` (SLI
+  source) and app counters (`backend/src/lib/metrics.ts`). Off unless
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set; the Grafana token is set only in Render's dashboard.
 - **Rollback:** `npm run db:rollback` reverses the latest migration using
   `backend/src/db/migrations-down/<tag>.down.sql`.
 - **Third-party integration:** `backend/src/integrations/simpsonsApi.ts`

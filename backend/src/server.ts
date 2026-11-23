@@ -41,6 +41,9 @@ function shutdown(signal: string) {
   server.close(() => {
     closeDb()
       .catch((err: unknown) => console.error("error closing database", err))
+      // Flush buffered spans, metrics and logs before exiting (D10).
+      .then(() => globalThis.__otelShutdown?.())
+      .catch(() => undefined)
       .finally(() => process.exit(0));
   });
   server.closeIdleConnections();

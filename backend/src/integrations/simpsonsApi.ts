@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ApiError, ApiErrors } from "../lib/errors.js";
+import { simpsonsApiCalls } from "../lib/metrics.js";
 
 /**
  * Server-side integration with The Simpsons API (https://thesimpsonsapi.com) — F10.
@@ -81,7 +82,12 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { signal: controller.signal });
+    simpsonsApiCalls.add(1, { outcome: res.ok ? "ok" : "error", "http.response.status_code": res.status });
+    return res;
+  } catch (err) {
+    simpsonsApiCalls.add(1, { outcome: "error", "error.type": controller.signal.aborted ? "timeout" : "network" });
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

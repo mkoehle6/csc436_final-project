@@ -5,6 +5,7 @@ import { notifyNewEvents, publishInTx, pruneOldEvents } from "../live/events.js"
 import { leaderboard } from "../live/leaderboard.js";
 import { nicknameFor } from "../live/nickname.js";
 import { recordAudit } from "./audit.js";
+import { answersCounter } from "./metrics.js";
 import { computeScore, type ScoreResult } from "./scoring.js";
 
 /**
@@ -92,6 +93,7 @@ export async function recordAnswer(
     });
     notifyNewEvents(); // after commit: wake open streams
     if (result.eventId % PRUNE_EVERY === 0) void pruneOldEvents(db).catch(() => undefined);
+    answersCounter.add(1, { channel, correct: String(isCorrect) });
     return { ok: true, ...result, isCorrect, correctAnswer: question.correctAnswer };
   } catch (err) {
     if (isUniqueViolation(err)) return { ok: false, reason: "already_answered" };

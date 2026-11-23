@@ -1,6 +1,7 @@
 import { count, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { questions } from "../db/schema.js";
+import { bankTopUps } from "./metrics.js";
 import { generateCharacterQuestions } from "./questionGenerator.js";
 
 /**
@@ -132,7 +133,9 @@ export async function getRound(category: Category, size: number): Promise<RoundR
   if (GENERATABLE.has(category) && (await bankSize(category)) < Math.max(MIN_BANK_SIZE, size)) {
     try {
       skipped = (await guardedTopUp(category)).status === "skipped";
+      bankTopUps.add(1, { outcome: skipped ? "skipped" : "done" });
     } catch {
+      bankTopUps.add(1, { outcome: "failed" });
       degraded = true; // serve whatever the bank has
     }
   }
