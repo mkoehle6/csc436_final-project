@@ -13,6 +13,8 @@ as evidence) before submission.
 | Staging backend | Render free instance | 0.00 | free tier: 750 instance-hours/month per workspace, sleeps after 15 min idle |
 | Staging database | Render free Postgres | 0.00 | expires 30 days after creation (runbook §3) |
 | Frontends (×2) | Render static sites | 0.00 | static sites are free |
+| Builds | Render build pipeline "Starter" (2 CPU, 8 GB) | 0.00 | 500 free build minutes/month included, then $5 per 1,000 min; **spend limit set to $0** (screenshot), so overage is impossible |
+| Workspace | Render **Hobby** plan | 0.00 | workspace fee; services are billed separately |
 | Custom domains beyond 2 included | 2 × $0.25 | 0.50 | Render dashboard ("2/2 included, $0.25/month each") |
 | Domain `burnscodev.com` | Porkbun .com renewal ≈ $11/yr | ~0.92 | Porkbun (**verify**) |
 | DNS + DNSSEC | Cloudflare Free | 0.00 | |
@@ -62,9 +64,21 @@ Bandwidth: first visit ~75 KB gzipped (JS) + API JSON (~2 KB per call): 1× ≈ 
 minimum instance sizes, not usage. The first real step is at 100×, driven by peak
 concurrency (SSE streams and request latency), not storage or bandwidth.
 
-## Budget alert
+## Budget controls (D11)
 
-Evidence to capture: a budget/spend alert configured in the Render dashboard (workspace
-→ Billing) at **$20/month** (above the expected ~$15), screenshot kept. If Render's
-plan offers no spend alert, the fallback is Grafana Cloud's usage alerts plus a
-calendar reminder to check the Render invoice weekly; state which was used.
+| Cost | Control | Type |
+| --- | --- | --- |
+| Build minutes | Render Workspace settings → Build Pipeline: **$0 monthly spend limit** ("If you reach this limit and run out of minutes, builds and other pre-deploy tasks stop running") | **hard cap** (screenshot) |
+| Production compute + database | fixed instance types in `render.yaml` (`plan:`); any change is a reviewed commit plus a deliberate Blueprint Manual Sync | fixed price, change-controlled |
+| Staging, static sites, DNS, Grafana | free tiers; exceeding them stops or degrades the service, it does not bill | capped by plan |
+| Bandwidth beyond the Hobby allowance | not capped | **monitored**: monthly invoice check (runbook §9); 100× estimate is ~18 GB/month |
+
+**Effect of the $0 build cap:** each deploy uses a few build minutes (shown per
+deploy in Render), so 500 minutes cover a normal month of deploys. If they ran out, deploys would stop
+but the running versions would keep serving. The fix is to raise the limit or wait
+for the next month; see runbook §9.
+
+The only spend setting found in the Render Hobby workspace is this build cap; there is
+no "alert me at $X" budget for compute. The **hard cap** on the one usage-billed item (builds) plus **fixed-price** instances
+make the monthly bill predictable: a surprise charge needs a plan change, and plan
+changes go through `render.yaml` review.

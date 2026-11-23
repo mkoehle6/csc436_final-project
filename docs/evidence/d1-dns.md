@@ -100,7 +100,8 @@ Render's.
 2. **Leftover `_acme-challenge` TXT records.** These are not used by the current
    certificates. They are harmless (a validation token grants nothing by itself) and
    are left in place until confirmed unused.
-3. **No CAA record (optional hardening).** A CAA record would limit which certificate
+3. **No CAA record at export time; added later the same day** (see `d2-https.md`).
+   The original reasoning for waiting: A CAA record would limit which certificate
    authorities may issue for the domain. It is not added now: Render chooses the CA
    (currently Google Trust Services, and possibly Let's Encrypt), and a wrong CAA
    would silently break the next automatic renewal (due before 2027-02-19).

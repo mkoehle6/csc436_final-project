@@ -306,11 +306,14 @@ fails the deploy while the previous version keeps serving.
 | F4 schema, ER diagram, restart tests | `docs/evidence/f4-persistence.md` |
 | F6 audit trail query output | `docs/evidence/f6-audit-trail.md` |
 | D1 DNS, TTLs, delegation, DNSSEC | `docs/evidence/d1-dns.md` |
+| D2 HTTPS, HSTS, CAA, certificate-expiry alert | `docs/evidence/d2-https.md` |
 | D5 clean-clone build | `docs/evidence/d5-clean-clone.txt` |
 | D6 CDN (MISS/HIT/304/purge) | `docs/evidence/d6-cdn.md` |
 | D7 security headers and CORS | `docs/evidence/d7-security-headers.md` |
 | D8 Lighthouse before/after | `docs/evidence/d8-lighthouse.md` |
 | D9 axe + keyboard walkthrough | `docs/evidence/d9-accessibility.md` |
+| D10 traces, logs, metrics, SLO alert that fired | `docs/evidence/d10-observability.md` |
+| D11 cost table and budget controls | `docs/cost.md` |
 
 ### Known limits (deliberate)
 

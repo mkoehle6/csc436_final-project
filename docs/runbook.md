@@ -106,3 +106,13 @@ Blueprints → TriviaNerd → **Manual Sync**. CI flags every push that changes 
 2. Check staging. 3. GitHub → Actions → **Promote to production** → Run workflow
    (optionally *dry run* first). It refuses if staging is unhealthy, CI failed, or the
    change would move production backwards, and warns if staging is behind `main`.
+
+**Builds stopped ("out of build minutes").** The workspace has a **$0 build spend
+limit** (`docs/cost.md`). If the 500 included minutes are used up, new builds and
+pre-deploy tasks stop, but running services keep serving. Either wait for the next
+month, or raise the limit in Render → Workspace settings → Build Pipeline (a cost
+decision, which needs the owner's approval).
+
+**Monthly cost check.** Once a month, open Render → Billing and compare the invoice
+with `docs/cost.md` (expected ≈ $15). Anything above $20 means a plan or bandwidth
+change: find it before the next invoice.
