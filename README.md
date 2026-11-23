@@ -188,8 +188,10 @@ npm run dev             # http://localhost:5173
   feedback.
 - Every remote call has explicit loading, empty, and error states
   (`frontend/src/components/StatusStates.tsx`,
-  `frontend/src/hooks/useTriviaQuestions.ts`). Proven by stopping the
-  backend and observing the error state with a working retry button.
+  `frontend/src/hooks/useTriviaQuestions.ts`). Tested with forced failures
+  in `frontend/src/App.failure.test.tsx` (network down, server error,
+  malformed response, empty bank, Retry recovery), and observed live in
+  the Game Day (`docs/postmortems.md`).
 
 ## Tests
 
@@ -208,7 +210,9 @@ Covers: input validation (400), anonymous write rejection (401), viewer
 write rejection (403), the core scoring calculation
 (`backend/tests/scoring.test.ts`, hand-predicted expected values), and the
 stubbed third-party integration (`backend/tests/simpsonsApi.test.ts`,
-retry/timeout/malformed-response handling with no real network call).
+retry/timeout/malformed-response handling with no real network call), and
+the frontend's behaviour under forced failures (`frontend/src/App.failure.test.tsx`,
+vitest + jsdom).
 
 ## Deployment (Render)
 
@@ -288,15 +292,31 @@ Migrations run automatically: on staging (free instance) at start, before the
 server listens; on production via `preDeployCommand`, so a failing migration
 fails the deploy while the previous version keeps serving.
 
-## Status
+## Documentation and evidence
 
-This is an in-progress build toward the full requirements checklist. Done so
-far: F1 (frontend scaffold + strict TS), F2 (loading/empty/error states),
-F3 (REST API + error shape + status codes), F4 (persistent PostgreSQL storage
-with PK/FK/index), F5 (versioned migrations), F6 (audit trail), the server
-side of F7/F8/F9 (OIDC verification + roles, pending a real provider wire-up
-on the frontend), F10 (Simpsons API integration with timeout/retry/cache/
-validation/degradation), part of Q1 (validation/authorization/integration/
-calculation tests). Not yet started: F11 (live updates), F12/F13 (MCP server
-+ App), most of the D-series (deployment/CDN/CI-CD/observability), and
-S1/S2 evidence beyond the rate-limit middleware itself.
+| Topic | Where |
+| --- | --- |
+| Architecture, trust boundaries, delivery pipeline | `docs/architecture.md` |
+| MCP server + App design (F12/F13) | `docs/design/mcp.md` |
+| Runbook (on-call triage, rollback, deploys) | `docs/runbook.md` |
+| Postmortems and Game Day (S2) | `docs/postmortems.md`, `docs/evidence/gameday-healthz-log.txt` |
+| Cost at 1×/10×/100× (D11) | `docs/cost.md` |
+| AI-use log and redaction attestation (Q3) | `docs/ai-use-log.md`, `docs/redaction-attestation.md` |
+| F3 REST transcripts (`curl -i`) | `docs/evidence/f3-curl-transcript*.md` |
+| F4 schema, ER diagram, restart tests | `docs/evidence/f4-persistence.md` |
+| F6 audit trail query output | `docs/evidence/f6-audit-trail.md` |
+| D1 DNS, TTLs, delegation, DNSSEC | `docs/evidence/d1-dns.md` |
+| D5 clean-clone build | `docs/evidence/d5-clean-clone.txt` |
+| D6 CDN (MISS/HIT/304/purge) | `docs/evidence/d6-cdn.md` |
+| D7 security headers and CORS | `docs/evidence/d7-security-headers.md` |
+| D8 Lighthouse before/after | `docs/evidence/d8-lighthouse.md` |
+| D9 axe + keyboard walkthrough | `docs/evidence/d9-accessibility.md` |
+
+### Known limits (deliberate)
+
+* Questions are character-based only; episode and location questions were cut
+  (the category filter still lists them and shows the empty state).
+* The CDN fronts the frontends only; the API is not behind Cloudflare
+  (`docs/evidence/d6-cdn.md`).
+* The audit log is append-only by code, not by a database rule
+  (`docs/evidence/f6-audit-trail.md`).
