@@ -21,7 +21,10 @@ it is served as 300 s for DNS-only records (see the live answers below).
 | `*._domainkey` | TXT | 300 | `v=DKIM1; p=` | null DKIM key: no valid signatures exist |
 | `_acme-challenge` | TXT ×2 | 300 | (challenge tokens) | leftover certificate-validation records (see findings) |
 
-All four CNAMEs are **DNS-only** (`cf-proxied:false`): Render terminates TLS and
+At export time all four CNAMEs were **DNS-only** (`cf-proxied:false`). **Update
+2026-11-23 04:11 UTC:** the two frontend records (`trivia`, `trivia-staging`) are now
+**Proxied** through Cloudflare for D6 (see `d6-cdn.md`), so public resolvers return
+Cloudflare addresses for them; the two API records stay DNS-only. Render terminates TLS and
 issues the certificates (issuer observed: Google Trust Services `WE1`, valid until
 2027-02-19).
 

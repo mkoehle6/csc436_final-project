@@ -28,7 +28,8 @@ curl -s "https://trivia-api.burnscodev.com/api/questions?count=1" | head -c 200
 | Symptom | Meaning | Go to |
 | --- | --- | --- |
 | `/healthz` 503, `database: unreachable` | backend up, database down | §3 |
-| `/healthz` times out / connection error | backend down or not deployed | §2 |
+| `/healthz` 503 with an **HTML** page (no JSON) | Render itself is not serving the app (e.g. service suspended) | Render dashboard, §2 |
+| `/healthz` times out / connection error | backend down or not deployed, **or still starting**: after a resume/restart allow ~3 min (Game Day: resume 03:45 → healthy 03:47:53) before acting | §2 |
 | `/api/questions` 502 `UPSTREAM_UNAVAILABLE` | question bank empty **and** Simpsons API down | §4 |
 | `/api/questions` 200 with `"degraded":true` | Simpsons API down, app serving saved questions (fine) | §4 |
 | 429 `RATE_LIMITED` | a client exceeded a limit; `Retry-After` says when to retry | §6 |

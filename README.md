@@ -235,7 +235,9 @@ First-time setup (Render dashboard, Hobby workspace):
    All URLs, origins and the CSP are plain values in `render.yaml`.
 3. Add the DNS records Render shows for each custom domain (DNS is on
    Cloudflare; keep the records **DNS-only** until Render has issued the
-   certificates).
+   certificates). Afterwards the two **frontend** records may be proxied (orange
+   cloud, SSL/TLS mode Full (strict)) for caching; keep the **API** records
+   DNS-only (see `docs/evidence/d6-cdn.md`).
 
 | Environment | Frontend | Backend |
 | --- | --- | --- |
