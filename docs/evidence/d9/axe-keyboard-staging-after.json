@@ -1,0 +1,131 @@
+{
+  "url": "https://trivia-staging.burnscodev.com/",
+  "when": "2026-11-23T04:52:00.278Z",
+  "viewports": {
+    "desktop": {
+      "axeVersion": "4.14.1",
+      "violations": [],
+      "passes": 40,
+      "incomplete": [],
+      "inapplicable": 51
+    },
+    "mobile": {
+      "axeVersion": "4.14.1",
+      "violations": [],
+      "passes": 41,
+      "incomplete": [],
+      "inapplicable": 50
+    }
+  },
+  "keyboard": [
+    {
+      "tag": "input",
+      "role": "",
+      "label": "Search questions",
+      "focusVisible": true
+    },
+    {
+      "tag": "select",
+      "role": "",
+      "label": "All categoriesCharacterEpisodeLocation",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Sign in with Google",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "New round",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 1What is Hank Hill's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 2What is Tina Ballerina's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 3What is Corporal Punishment's occupation",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 4What is Lenny Leonard's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 5What is Sakatumi's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 6What is Sanjay Nahasapeemapetilon's occu",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 7What is Adam's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 8What is Colonel Sanders's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 9What is Jay Sherman's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Church Organist",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Assistant Manager of Strickland Propane",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Network executive",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Lieutenant",
+      "focusVisible": true
+    }
+  ],
+  "keyboardAnswer": {
+    "tabPresses": 14,
+    "focused": "Judge at the Springfield County Court House",
+    "pressed": "Enter",
+    "verdict": "Not quite. The answer is Enforcer on Krusty's show.",
+    "announcedVia": "aria-live=polite"
+  }
+}
