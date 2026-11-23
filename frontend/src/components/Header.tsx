@@ -17,9 +17,10 @@ export function Header({ search, onSearchChange, category, onCategoryChange }: H
 
   return (
     <header className="app-header">
-      <div className="app-header__brand">
+      {/* D9: the page title is the one level-one heading (axe: page-has-heading-one). */}
+      <h1 className="app-header__brand">
         Trivia<span className="app-header__brand-accent">Nerd</span>
-      </div>
+      </h1>
       <div className="app-header__search-group">
         <input
           type="search"

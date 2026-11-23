@@ -1,0 +1,143 @@
+{
+  "url": "https://trivia.burnscodev.com/",
+  "when": "2026-11-23T04:38:05.847Z",
+  "viewports": {
+    "desktop": {
+      "axeVersion": "4.14.1",
+      "violations": [
+        {
+          "id": "page-has-heading-one",
+          "impact": "moderate",
+          "help": "Page should contain a level-one heading",
+          "nodes": [
+            "html"
+          ]
+        }
+      ],
+      "passes": 39,
+      "incomplete": [],
+      "inapplicable": 51
+    },
+    "mobile": {
+      "axeVersion": "4.14.1",
+      "violations": [
+        {
+          "id": "page-has-heading-one",
+          "impact": "moderate",
+          "help": "Page should contain a level-one heading",
+          "nodes": [
+            "html"
+          ]
+        }
+      ],
+      "passes": 40,
+      "incomplete": [],
+      "inapplicable": 50
+    }
+  },
+  "keyboard": [
+    {
+      "tag": "input",
+      "role": "",
+      "label": "Search questions",
+      "focusVisible": true
+    },
+    {
+      "tag": "select",
+      "role": "",
+      "label": "All categoriesCharacterEpisodeLocation",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Sign in with Google",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "New round",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 1What is Master Sushi Chef's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 2What is Billy the Kid's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 3What is Mario's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 4What is Johnny Carson's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 5What is Hot Dog Vendor's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 6What is Popular Girl 1's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 7What is Old King Coal's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 8What is Dr. Foster's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Question 9What is Courtney Love's occupation?",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Singer",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Ballet teacher at Springfield Elementary School",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Comedian",
+      "focusVisible": true
+    },
+    {
+      "tag": "button",
+      "role": "",
+      "label": "Sushi Chef at The Happy Sumo",
+      "focusVisible": true
+    }
+  ],
+  "keyboardAnswer": "found answer button at tab stop 5"
+}

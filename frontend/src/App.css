@@ -65,6 +65,7 @@ body {
 }
 
 .app-header__brand {
+  margin: 0;
   font-weight: 800;
   font-size: 1.4rem;
   letter-spacing: 0.02em;
@@ -204,9 +205,11 @@ body {
   color: var(--color-navy);
 }
 
+/* D8: a fixed-height box, reserved before the image arrives, so loading it
+   (or falling back to the placeholder) never shifts the layout (CLS). */
 .quiz-panel__image {
   width: 100%;
-  max-height: 320px;
+  height: min(320px, 60vw);
   object-fit: contain;
   border-radius: 10px;
   background: var(--color-blue-soft);
@@ -217,7 +220,6 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--color-muted);
-  height: 220px;
 }
 
 .quiz-panel__choices {

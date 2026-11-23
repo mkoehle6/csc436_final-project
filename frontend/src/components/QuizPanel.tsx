@@ -27,7 +27,14 @@ export function QuizPanel({ question, answer, onAnswer }: QuizPanelProps) {
       </h2>
 
       {question.imagePath && !imageFailed ? (
-        <img className="quiz-panel__image" src={question.imagePath} alt="" onError={() => setImageFailed(true)} />
+        <img
+          className="quiz-panel__image"
+          src={question.imagePath}
+          alt=""
+          width={500}
+          height={500}
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <div className="quiz-panel__image quiz-panel__image--placeholder" aria-hidden="true">
           Image unavailable
