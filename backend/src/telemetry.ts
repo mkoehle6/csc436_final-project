@@ -7,9 +7,13 @@
  * Off unless OTEL_EXPORTER_OTLP_ENDPOINT is set, so local development and tests
  * send nothing. On Render the standard OTEL_* variables are set in the dashboard
  * (the Grafana Cloud token lives there, never in the repo):
- *   OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS,
+ *   OTEL_EXPORTER_OTLP_ENDPOINT (https://…/otlp), OTEL_EXPORTER_OTLP_HEADERS,
  *   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf, OTEL_SERVICE_NAME,
  *   OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=staging|production
+ *
+ * Telemetry must never take the service down: an invalid configuration or an SDK
+ * start-up failure logs a warning and the app runs without telemetry. (A missing
+ * https:// once crashed a staging deploy; the health check kept the old version up.)
  *
  * What is exported:
  *   traces  — every request, with child spans for Postgres queries (pg) and outbound
@@ -21,14 +25,28 @@
  */
 import { register } from "node:module";
 
-const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-
 type Shutdown = () => Promise<void>;
 declare global {
   var __otelShutdown: Shutdown | undefined;
 }
 
-if (endpoint) {
+/** The configured OTLP endpoint, or null (with a warning) if absent or not an http(s) URL. */
+export function otlpEndpoint(raw = process.env.OTEL_EXPORTER_OTLP_ENDPOINT): URL | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" || url.protocol === "http:") return url;
+  } catch {
+    // fall through
+  }
+  console.error(
+    "OpenTelemetry DISABLED: OTEL_EXPORTER_OTLP_ENDPOINT must be a full http(s) URL " +
+      '(e.g. "https://otlp-gateway-….grafana.net/otlp"); the app continues without telemetry.',
+  );
+  return null;
+}
+
+async function start(endpoint: URL) {
   // ESM support: lets the instrumentations patch modules loaded via `import`.
   register("@opentelemetry/instrumentation/hook.mjs", import.meta.url);
 
@@ -69,5 +87,14 @@ if (endpoint) {
   });
   sdk.start();
   globalThis.__otelShutdown = () => sdk.shutdown();
-  console.log(`OpenTelemetry enabled, exporting to ${new URL(endpoint).host}`);
+  console.log(`OpenTelemetry enabled, exporting to ${endpoint.host}`);
+}
+
+const endpoint = otlpEndpoint();
+if (endpoint) {
+  try {
+    await start(endpoint);
+  } catch (err) {
+    console.error("OpenTelemetry DISABLED: SDK failed to start; the app continues without telemetry.", err);
+  }
 }
