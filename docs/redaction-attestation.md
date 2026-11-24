@@ -4,11 +4,11 @@
 
 ## Secrets: exposures and remediation
 
-| Date | What | How exposed | Remediation | Live secret exposed now? |
-| --- | --- | --- | --- | --- |
-| 2026-11-20 | Google OAuth client secret (local dev client) | pasted into the AI chat | rotated the same day before further use; old secret deleted | No |
-| 2026-11-20 | Google OAuth client secret (local dev client, second) | selected in the editor (sent to the AI as context) | rotated; old secret deleted | No |
-| 2026-11-21 | First staging and production signing keys (`AUTH_PRIVATE_JWK`) | selected in the editor | regenerated before use; deployed keys are different (`kid` checked from outside) | No |
+| Date       | What                                                           | How exposed                                        | Remediation                                                                      | Live secret exposed now? |
+| ---------- | -------------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------ |
+| 2026-11-20 | Google OAuth client secret (local dev client)                  | pasted into the AI chat                            | rotated the same day before further use; old secret deleted                      | No                       |
+| 2026-11-20 | Google OAuth client secret (local dev client, second)          | selected in the editor (sent to the AI as context) | rotated; old secret deleted                                                      | No                       |
+| 2026-11-21 | First staging and production signing keys (`AUTH_PRIVATE_JWK`) | selected in the editor                             | regenerated before use; deployed keys are different (`kid` checked from outside) | No                       |
 
 Never exposed: Render deploy hooks (GitHub secrets only), Grafana token (Render env
 only), production Google client secrets (Render env only), database credentials
@@ -29,9 +29,9 @@ every one of them is rotated (runbook §10), so the submitted copies stop workin
 
 ## Personal data
 
-* The app stores real Google identities (email, display name) for signed-in users only;
+- The app stores real Google identities (email, display name) for signed-in users only;
   public surfaces (leaderboard, live events, MCP tools) use synthetic nicknames.
-* Screenshots and recordings: the "Signed in as …" line on consent screens, browser
+- Screenshots and recordings: the "Signed in as …" line on consent screens, browser
   profile pictures, email addresses and tokens are blurred / removed before submission.
 
 ## Attestation
@@ -41,4 +41,4 @@ submitted with this project. No live secret appears in them (the separate, priva
 configuration file requested by the instructor excepted, see above), and all real personal data
 has been redacted or replaced with synthetic data.
 
-Signed: ____________________  Date: __________
+Signed: **Mark Koehler** &nbsp;&nbsp; Date: **11-23-26**

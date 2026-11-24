@@ -38,8 +38,17 @@ and ran every production promotion.
 5. **render.yaml change deployed production directly** (incident 1): the AI changed the
    Blueprint without recognising Render's auto-sync behaviour.
 
-**Student:** pick the one you challenged most directly for the dossier's "one challenged
-AI claim", and describe in your own words how you checked it.
+### The AI claim I directly challenged (student's own words)
+
+AI claim I directly challenged: Claude claimed the evidence folder was complete. I had
+uploaded screenshots during the construction of this app. I did not find any
+screenshots stored in the repo.
+
+*Outcome (recorded for the dossier):* the evidence docs referred to "(screenshot)"
+without any image files in the repository. After the challenge, 22 screenshots were
+added to `docs/evidence/screenshots/` (commit `25d4fbb`), with the student's name
+blacked out on two consent screens and one screenshot left out because it showed an
+email address.
 
 ## How AI output was verified
 
