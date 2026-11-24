@@ -105,3 +105,9 @@ GET /assets/index-fEQ2YNmA.js  200  cf-cache-status: HIT
 TLS: CN=trivia.burnscodev.com, issuer Google Trust Services WE1, valid to 2027-02-19
 trivia-api.burnscodev.com/healthz  200 from 216.24.57.18 (Render direct, not proxied)
 ```
+
+## Screenshots
+
+* [`d1-d2-d6-cloudflare-dns-records.png`](screenshots/d1-d2-d6-cloudflare-dns-records.png)
+
+(Index with descriptions: `screenshots/README.md`.)

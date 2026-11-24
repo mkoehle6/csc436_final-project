@@ -42,13 +42,14 @@ method as the Game Day, run again after the SLO existed. Outside logger:
 | before 20:37 | student | SLO created; its recording rules start (13 shown) |
 | 20:37 | student | staging suspended |
 | 20:37:06 | logger | staging **503** (Render "suspended" page); production 200 |
-| 20:44 | Grafana email | availability alert (synthetic check failures) |
+| 20:44 | Grafana email | **`ProbeFailedExecutionsTooHigh [5m]` Firing**: "Check job:trivianerd-staging-healthz … has failed 2 times in the last 5m" (`executions=2 threshold=2`, check frequency 120000 ms) (screenshot) |
 | ~20:51 | Grafana SLO page | SLI 50.00% (5 of 10 events failed), error budget **−9900%**, target 99.50% |
 | ~20:52 | Grafana Alert rules | **both burn-rate alerts Firing** ("Very High" and "High"); screenshot |
 | 20:52:32 | logger | staging not answering (10 s timeouts) while resuming |
 | 20:53 | student | staging resumed |
 | 20:53:30 / 20:53:48 | `/healthz` / logger | new instance started; staging **200**, database ok |
 | 20:37–20:53 | logger | production **63/63 checks 200** |
+| 21:04 | Grafana email | **`ProbeFailedExecutionsTooHigh [5m]` Resolved** ("failed 1 times in the last 5m", below the threshold of 2), about 11 min after staging was healthy again (screenshot) |
 
 ### Interpretation
 
@@ -58,6 +59,10 @@ method as the Game Day, run again after the SLO existed. Outside logger:
   long windows. The SLO was only minutes old, so the long window contained mostly
   outage data. The "−9900%" budget means the outage spent the week's budget about 100
   times over, within the SLO's short history.
+* **Resolution lags recovery:** the availability alert resolved 11 minutes after
+  staging was back. That is the same lag as in the Game Day: the 5-minute window must
+  drain of failures, plus evaluation and notification batching. During that time
+  `/healthz` was the faster source of truth.
 * **Alert ordering:** the simple availability alert (fixed threshold on failed
   checks) emailed at 20:44. The SLO alerts were Firing by ~20:52. The two layers answer
   different questions: "is it down now?" and "are we breaking our promise?".
@@ -70,8 +75,10 @@ method as the Game Day, run again after the SLO existed. Outside logger:
 * **Certificate expiry** (`SyntheticCheckTLSExpiryBreach`): threshold temporarily set
   to 100 days so it would fire against the ~88 days remaining. It fired and the email
   arrived (screenshots), then it was set back to 14 days.
-* **Availability** (synthetic check failed executions): fired in the Game Day
-  (`postmortems.md`) and in this test.
+* **Availability**: Grafana's per-check rule `ProbeFailedExecutionsTooHigh [5m]`, which
+  fires when the check fails **2 times within 5 minutes** (with one run every 2 minutes,
+  that is about 2–4 minutes of outage). It fired in the Game Day (`postmortems.md`)
+  and in this test (email screenshot, 3:44 PM local).
 
 ## Limits
 
@@ -82,3 +89,16 @@ method as the Game Day, run again after the SLO existed. Outside logger:
   (1-minute interval, as recommended in the Game Day) with the same alerts.
 * The SLO measures availability from 2 probe locations every 2 minutes. Shorter
   outages can fall between checks, and latency is not part of the SLI.
+
+## Screenshots
+
+* [`d10-tempo-trace-api-to-postgres.png`](screenshots/d10-tempo-trace-api-to-postgres.png)
+* [`d10-loki-log-with-traceid.png`](screenshots/d10-loki-log-with-traceid.png)
+* [`d10-metric-answers-total.png`](screenshots/d10-metric-answers-total.png)
+* [`d10-synthetic-check-up.png`](screenshots/d10-synthetic-check-up.png)
+* [`d10-slo-overview.png`](screenshots/d10-slo-overview.png)
+* [`d10-slo-burn-rate-alerts-firing.png`](screenshots/d10-slo-burn-rate-alerts-firing.png)
+* [`d10-availability-alert-email-firing.png`](screenshots/d10-availability-alert-email-firing.png)
+* [`d10-availability-alert-email-resolved.png`](screenshots/d10-availability-alert-email-resolved.png)
+
+(Index with descriptions: `screenshots/README.md`.)

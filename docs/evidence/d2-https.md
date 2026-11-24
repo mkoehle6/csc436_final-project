@@ -60,7 +60,7 @@ on every run (staging check: the `SSL Expiry` panel showed **12.57 weeks** ≈ 8
 All four certificates come from the same issuer with the same lifetime (table above),
 so one monitored host is representative. The alert
 **`SyntheticCheckTLSExpiryBreach`** was set to 100 days so that it would fire. It
-showed **Firing**, the email arrived (screenshots), and the threshold was then set
+showed **Firing**, and the email arrived (2026-11-22 10:09 PM local: "The TLS certificate for job:trivianerd-staging-healthz … will expire in 88 days", value `A=87.96`, one instance per probe; screenshots), and the threshold was then set
 back to **14 days**. Renewal is automatic, so a certificate with under 14 days left
 means renewal has failed: check the custom domain's status in the Render dashboard
 (and that the CAA records still allow the issuer).
@@ -71,3 +71,12 @@ means renewal has failed: check the custom domain's status in the Render dashboa
   Cloudflare's). We monitor them; we do not run them.
 * The CAA set includes Cloudflare's CAs, which we did not choose individually;
   Cloudflare adds them automatically for its proxied hosts.
+
+## Screenshots
+
+* [`d1-d2-d6-cloudflare-dns-records.png`](screenshots/d1-d2-d6-cloudflare-dns-records.png)
+* [`d2-synthetic-check-ssl-expiry.png`](screenshots/d2-synthetic-check-ssl-expiry.png)
+* [`d2-tls-expiry-alert-firing.png`](screenshots/d2-tls-expiry-alert-firing.png)
+* [`d2-tls-expiry-alert-email.png`](screenshots/d2-tls-expiry-alert-email.png)
+
+(Index with descriptions: `screenshots/README.md`.)

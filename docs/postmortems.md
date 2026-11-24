@@ -156,3 +156,11 @@ instance's start-up, then the health gate.
 * The alert email and the "suspended" 503 page are both distinguishable from an
   application failure (503 from `/healthz` carries a JSON body). This tells an
   on-call person whether the platform or the app is at fault.
+
+## Screenshots
+
+* [`s2-gameday-frontend-error-states.png`](evidence/screenshots/s2-gameday-frontend-error-states.png)
+* [`d10-availability-alert-email-firing.png`](evidence/screenshots/d10-availability-alert-email-firing.png)
+* [`d10-availability-alert-email-resolved.png`](evidence/screenshots/d10-availability-alert-email-resolved.png)
+
+(Index with descriptions: `evidence/screenshots/README.md`.)

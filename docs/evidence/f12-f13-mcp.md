@@ -43,3 +43,11 @@ production has the same at `trivia-api.burnscodev.com/mcp`.
   reproduces browser behaviour (AI-use log, challenged claim 1).
 * **MCP Inspector could not register** (no CIMD document for it). Fixed in `474c2a2`
   (`/oauth/clients/mcp-inspector.json`).
+
+## Screenshots
+
+* [`f12-inspector-step-up-insufficient-scope.png`](screenshots/f12-inspector-step-up-insufficient-scope.png)
+* [`f12-consent-viewer-role-capped.png`](screenshots/f12-consent-viewer-role-capped.png)
+* [`f12-consent-operator.png`](screenshots/f12-consent-operator.png)
+
+(Index with descriptions: `screenshots/README.md`.)

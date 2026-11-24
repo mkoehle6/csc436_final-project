@@ -80,3 +80,13 @@ the backend code is identical to what ran before the demo.
 * CI history (screenshot of Actions → CI): 21 runs, one per push to `main`. All the
   runs shown, #15 (`08f9a17`) to #21 (`b7f6595`), passed, each in about 3½–5½ minutes.
   Staging deploys only after the run for that commit succeeds.
+
+## Screenshots
+
+* [`d4-render-rollback.png`](screenshots/d4-render-rollback.png)
+* [`d4-render-roll-forward.png`](screenshots/d4-render-roll-forward.png)
+* [`d4-promote-runs.png`](screenshots/d4-promote-runs.png)
+* [`d4-promote-12-summary.png`](screenshots/d4-promote-12-summary.png)
+* [`d4-ci-runs.png`](screenshots/d4-ci-runs.png)
+
+(Index with descriptions: `screenshots/README.md`.)

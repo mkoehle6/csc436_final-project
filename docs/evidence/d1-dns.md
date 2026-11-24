@@ -105,3 +105,9 @@ Render's.
    authorities may issue for the domain. It is not added now: Render chooses the CA
    (currently Google Trust Services, and possibly Let's Encrypt), and a wrong CAA
    would silently break the next automatic renewal (due before 2027-02-19).
+
+## Screenshots
+
+* [`d1-d2-d6-cloudflare-dns-records.png`](screenshots/d1-d2-d6-cloudflare-dns-records.png)
+
+(Index with descriptions: `screenshots/README.md`.)

@@ -82,3 +82,9 @@ The only spend setting found in the Render Hobby workspace is this build cap; th
 no "alert me at $X" budget for compute. The **hard cap** on the one usage-billed item (builds) plus **fixed-price** instances
 make the monthly bill predictable: a surprise charge needs a plan change, and plan
 changes go through `render.yaml` review.
+
+## Screenshots
+
+* [`d11-build-pipeline-spend-limit.png`](evidence/screenshots/d11-build-pipeline-spend-limit.png)
+
+(Index with descriptions: `evidence/screenshots/README.md`.)
