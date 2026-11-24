@@ -13,8 +13,8 @@ logs `OpenTelemetry DISABLED …` and the app keeps running (incident 2 in
 | Signal | What | Evidence |
 | --- | --- | --- |
 | **Traces** | HTTP server spans (Express), outgoing HTTP (Simpsons API), PostgreSQL queries (`pg`) | Tempo screenshot: `GET /api/questions` on staging with child `pg.query` spans to Render Postgres (`db.system.name=postgresql`, `server.address=dpg-…`), `service.version=08f9a17`. This is the **cross-component trace**: app → database |
-| **Logs** | pino request and app logs exported to Loki; each line carries `trace_id`/`span_id`, so a log line links to its trace. `Authorization`, `Cookie` and `Set-Cookie` are redacted | verified with a local OTLP receiver (log records carried `trace_id`); Loki screenshot: _student to add (Explore → Loki → `service_name="trivianerd-api"`)_ |
-| **Metrics** | auto-instrumented HTTP server duration; custom counters `trivianerd.answers` (channel, correct), `trivianerd.simpsons_api.calls` (outcome), `trivianerd.question_bank.top_ups` (result) in `backend/src/lib/metrics.ts`. Synthetic Monitoring adds `probe_success`, latency and TLS expiry | synthetic check dashboard screenshot; custom-metric screenshot: _student to add (Explore → Prometheus → `trivianerd_answers_total`)_ |
+| **Logs** | pino request and app logs exported to Loki; each line carries `trace_id`/`span_id`, so a log line links to its trace. `Authorization`, `Cookie` and `Set-Cookie` are redacted | Loki screenshot (Explore → `{service_name="trivianerd-api"}`): 676 lines in the last hour, common label `deployment_environment_name=staging`; an expanded `request completed` line shows the field **`traceID` = `ac59d3c13569fedc5782559d9ae4adf0`**, the key that links the log line to its trace in Tempo. Also verified earlier with a local OTLP receiver. |
+| **Metrics** | auto-instrumented HTTP server duration; custom counters `trivianerd.answers` (channel, correct), `trivianerd.simpsons_api.calls` (outcome), `trivianerd.question_bank.top_ups` (result) in `backend/src/lib/metrics.ts`. Synthetic Monitoring adds `probe_success`, latency and TLS expiry | synthetic check dashboard screenshot; custom-metric screenshot (Explore → `grafanacloud-…-prom` → `sum by (correct) (trivianerd_answers_total)`): after the student answered questions while signed in on staging, the `correct="true"` series rose from 2 to 7 within about a minute (30-second export interval). The OTel name `trivianerd.answers` appears in Prometheus as `trivianerd_answers_total`. A dashboard would plot `rate(...)`; the raw count is shown here because it can be checked against the answers given. |
 
 ## SLO
 
@@ -28,7 +28,8 @@ Defined in Grafana Cloud SLO (Alerts & IRM → SLO):
 | Alerts | Grafana-generated multi-window burn-rate rules: **"Error Budget Burn Rate is Very High"** (fast burn) and **"…is High"** (slow burn), routed to the email contact point |
 
 Staging is the SLO target because it is the environment we can break on purpose.
-Production has the same synthetic check and availability alert.
+Production is **not** yet under a synthetic check: during both outage tests it was
+watched by the outside logger only (see Limits).
 
 ## The SLO alert firing (deliberate test, 2026-11-23)
 
@@ -74,7 +75,10 @@ method as the Game Day, run again after the SLO existed. Outside logger:
 
 ## Limits
 
-* The SLO is on staging (free instance) for safe testing; production has the check
-  and availability alert but no SLO of its own.
+* **Only staging is monitored by Grafana** (one synthetic check, its alerts and the
+  SLO), because it is the environment we break on purpose. Production has telemetry
+  (traces, logs, metrics) but no synthetic check, availability alert or SLO yet. The
+  next step is to clone the staging check for `https://trivia-api.burnscodev.com/healthz`
+  (1-minute interval, as recommended in the Game Day) with the same alerts.
 * The SLO measures availability from 2 probe locations every 2 minutes. Shorter
   outages can fall between checks, and latency is not part of the SLI.

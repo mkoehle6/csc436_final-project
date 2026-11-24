@@ -148,8 +148,8 @@ instance's start-up, then the health gate.
 * **Detection time is a configuration choice.** For production, a 1-minute interval
   with a 3-minute window would cut detection to roughly 3–4 minutes. That costs about
   twice the check executions (see `cost.md`; the free tier still covers one such
-  check). Recommended action: run the production check every minute; staging can
-  stay at 2 minutes.
+  check). Recommended action: add a production check (none exists yet) at a 1-minute
+  interval; staging can stay at 2 minutes.
 * **Start-up is part of the outage.** About 1 minute of timeouts came after the resume
   click, before the health gate passed. Action: runbook §1 now states the measured
   ~3-minute recovery after a resume or restart, so on-call does not act too early.

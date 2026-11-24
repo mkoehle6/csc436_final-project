@@ -305,8 +305,11 @@ fails the deploy while the previous version keeps serving.
 | F3 REST transcripts (`curl -i`) | `docs/evidence/f3-curl-transcript*.md` |
 | F4 schema, ER diagram, restart tests | `docs/evidence/f4-persistence.md` |
 | F6 audit trail query output | `docs/evidence/f6-audit-trail.md` |
+| F7 OAuth/OIDC sign-in (redacted HAR) | `docs/evidence/f7-oauth-login.md` |
+| F12/F13 MCP server + App (screenshots, recording) | `docs/evidence/f12-f13-mcp.md` |
 | D1 DNS, TTLs, delegation, DNSSEC | `docs/evidence/d1-dns.md` |
 | D2 HTTPS, HSTS, CAA, certificate-expiry alert | `docs/evidence/d2-https.md` |
+| D4 CI/CD pipeline and rollback demo | `docs/evidence/d4-cicd-rollback.md` |
 | D5 clean-clone build | `docs/evidence/d5-clean-clone.txt` |
 | D6 CDN (MISS/HIT/304/purge) | `docs/evidence/d6-cdn.md` |
 | D7 security headers and CORS | `docs/evidence/d7-security-headers.md` |

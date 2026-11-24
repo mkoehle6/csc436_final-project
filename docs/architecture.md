@@ -9,24 +9,24 @@ Browser → DNS → CDN → app → database / third parties.
 ```mermaid
 flowchart LR
   subgraph Clients
-    B[Browser<br/>React SPA]
-    M[MCP host<br/>Claude / MCP Inspector]
+    B["Browser<br/>React SPA"]
+    M["MCP host<br/>Claude / MCP Inspector"]
   end
 
   subgraph DNS["DNS: Cloudflare (DNSSEC), registrar Porkbun"]
-    D1[trivia / trivia-staging<br/>CNAME → Render static sites]
-    D2[trivia-api / trivia-staging-api<br/>CNAME → Render web services]
+    D1["trivia / trivia-staging<br/>CNAME → Render static sites"]
+    D2["trivia-api / trivia-staging-api<br/>CNAME → Render web services"]
   end
 
   subgraph Render["Render (oregon), per environment: staging | production"]
-    S[Static site + Render CDN<br/>index.html no-cache<br/>/assets/* immutable 1y]
-    API[Backend web service<br/>Express + TypeScript<br/>REST /api · SSE /api/live · OAuth /auth · MCP /mcp]
-    DB[(Render Postgres 17<br/>private network only)]
+    S["Static site + Render CDN<br/>index.html no-cache<br/>/assets/* immutable 1y"]
+    API["Backend web service<br/>Express + TypeScript<br/>REST /api · SSE /api/live · OAuth /auth · MCP /mcp"]
+    DB[("Render Postgres 17<br/>private network only")]
   end
 
-  G[Google OIDC<br/>accounts.google.com]
-  SA[The Simpsons API<br/>thesimpsonsapi.com + CDN]
-  GC[Grafana Cloud<br/>OTLP: traces · metrics · logs]
+  G["Google OIDC<br/>accounts.google.com"]
+  SA["The Simpsons API<br/>thesimpsonsapi.com + CDN"]
+  GC["Grafana Cloud<br/>OTLP: traces · metrics · logs"]
 
   B -- "1 DNS lookup" --> D1
   B -- "HTTPS GET page" --> S
@@ -52,9 +52,9 @@ each Postgres query and each outbound Simpsons API call, exported to Grafana Clo
 ```mermaid
 flowchart TB
   subgraph U["UNTRUSTED: the internet"]
-    B[Browser / any web page]
-    M[MCP clients<br/>identified by CIMD URL]
-    X[Attackers]
+    B["Browser / any web page"]
+    M["MCP clients<br/>identified by CIMD URL"]
+    X["Attackers"]
   end
 
   subgraph E["Edge: Cloudflare DNS · Render TLS + routing"]
@@ -62,18 +62,18 @@ flowchart TB
 
   subgraph T["TRUSTED: our backend process (per environment)"]
     MW["Gatekeepers<br/>CORS allowlist · rate limits · body validation (zod)<br/>JWT verify: signature, iss, aud, exp, typ, scope, role"]
-    APP[Routes / MCP tools<br/>business logic]
-    KEY[[Signing key<br/>AUTH_PRIVATE_JWK<br/>Render env only]]
+    APP["Routes / MCP tools<br/>business logic"]
+    KEY[["Signing key<br/>AUTH_PRIVATE_JWK<br/>Render env only"]]
   end
 
   subgraph P["PRIVATE: Render private network"]
-    DB[(Postgres<br/>ipAllowList: [ ])]
+    DB[("Postgres<br/>no public access")]
   end
 
   subgraph TP["THIRD PARTIES: trusted for one purpose, verified"]
-    G[Google: identity only<br/>ID token checked via JWKS + nonce]
-    SA[Simpsons API: data only<br/>responses schema-validated]
-    GC[Grafana Cloud: telemetry sink<br/>no user secrets sent]
+    G["Google: identity only<br/>ID token checked via JWKS + nonce"]
+    SA["Simpsons API: data only<br/>responses schema-validated"]
+    GC["Grafana Cloud: telemetry sink<br/>no user secrets sent"]
   end
 
   B -- "cookie (httpOnly, SameSite=Lax, /auth)<br/>+ Bearer (aud=trivianerd-api)" --> E --> MW
@@ -102,8 +102,8 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  Dev[Developer push to main] --> CI[GitHub Actions CI<br/>validate render.yaml · typecheck · lint · test · build]
-  CI -- "checks pass" --> ST[Staging<br/>auto-deploy · /healthz gate]
-  ST -- "Promote workflow:<br/>staging healthy + CI passed + not backwards" --> PR[Production<br/>autoDeploy off · preDeploy migrations · /healthz gate]
-  BP[render.yaml change] -. "Manual Sync only<br/>(auto-sync off after incident)" .-> ST & PR
+  Dev["Developer push to main"] --> CI["GitHub Actions CI<br/>validate render.yaml · typecheck · lint · test · build"]
+  CI -- "checks pass" --> ST["Staging<br/>auto-deploy · /healthz gate"]
+  ST -- "Promote workflow:<br/>staging healthy + CI passed + not backwards" --> PR["Production<br/>autoDeploy off · preDeploy migrations · /healthz gate"]
+  BP["render.yaml change"] -. "Manual Sync only<br/>(auto-sync off after incident)" .-> ST & PR
 ```

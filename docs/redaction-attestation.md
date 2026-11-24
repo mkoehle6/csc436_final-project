@@ -19,6 +19,14 @@ prefixes, private JWK fields, deploy-hook URLs, credentialed database URLs);
 pino redacts `Authorization`, `Cookie` and `Set-Cookie`; tokens never written to
 logs; the access token in the browser is kept in memory only.
 
+## Secrets provided to the instructor (on request)
+
+At the instructor's request, the live configuration values (Google OAuth client
+secrets, signing keys, database URLs, Grafana token, Render deploy hooks) were
+provided **privately through the school's submission site**, in a separate file that
+is not part of the repository, the evidence or any public surface. After grading,
+every one of them is rotated (runbook §10), so the submitted copies stop working.
+
 ## Personal data
 
 * The app stores real Google identities (email, display name) for signed-in users only;
@@ -29,7 +37,8 @@ logs; the access token in the browser is kept in memory only.
 ## Attestation
 
 I have reviewed the repository, images, logs, screenshots, recordings and client bundle
-submitted with this project. No live secret appears in them, and all real personal data
+submitted with this project. No live secret appears in them (the separate, private
+configuration file requested by the instructor excepted, see above), and all real personal data
 has been redacted or replaced with synthetic data.
 
 Signed: ____________________  Date: __________

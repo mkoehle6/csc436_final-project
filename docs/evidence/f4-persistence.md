@@ -11,28 +11,28 @@ schema lives in `backend/src/db/schema.ts`. Migrations `0000`–`0005` are in
 ```mermaid
 erDiagram
     users ||--o{ game_sessions : plays
-    users ||--o{ auth_sessions : "signs in (refresh cookie)"
-    users ||--o{ oauth_authorization_codes : "grants (MCP)"
+    users ||--o{ auth_sessions : "signs in"
+    users ||--o{ oauth_authorization_codes : grants
     users ||--o{ oauth_refresh_tokens : holds
     users ||--o{ mcp_pending_actions : confirms
-    users |o--o{ audit_log : "acts (null = system/CLI)"
+    users |o--o{ audit_log : acts
     game_sessions ||--o{ answers : contains
     questions ||--o{ answers : "answered in"
-    oauth_authorization_codes ||--o{ oauth_refresh_tokens : "token family"
+    oauth_authorization_codes ||--o{ oauth_refresh_tokens : family
 
     users {
         int id PK
-        text oidc_subject UK "Google sub"
+        text oidc_subject "unique"
         text email
         text display_name
-        user_role role "enum viewer|operator"
+        user_role role "enum"
         timestamptz created_at
     }
     questions {
         int id PK
-        text prompt "UK with category"
+        text prompt "unique with category"
         question_category category "enum"
-        text correct_answer "never sent to browsers"
+        text correct_answer "server only"
         jsonb choices
         text image_path
         int source_entity_id
@@ -47,15 +47,15 @@ erDiagram
     }
     answers {
         int id PK
-        int session_id FK "UK with question_id"
+        int session_id FK "unique with question_id"
         int question_id FK
         text selected_answer
-        boolean is_correct "decided by the server"
+        boolean is_correct "server decided"
         timestamptz answered_at
     }
     auth_sessions {
         int id PK
-        text token_hash UK "SHA-256 of the cookie"
+        text token_hash "unique SHA-256 of cookie"
         int user_id FK
         timestamptz expires_at
         timestamptz revoked_at
@@ -69,7 +69,7 @@ erDiagram
     }
     oauth_authorization_codes {
         int id PK
-        text code_hash UK
+        text code_hash "unique"
         text client_id
         int user_id FK
         text scope
@@ -78,7 +78,7 @@ erDiagram
     }
     oauth_refresh_tokens {
         int id PK
-        text token_hash UK
+        text token_hash "unique"
         int family_id FK
         int user_id FK
         timestamptz replaced_at "rotation"
@@ -86,21 +86,21 @@ erDiagram
     }
     mcp_pending_actions {
         int id PK
-        text code_hash UK
+        text code_hash "unique"
         int user_id FK
         text payload_hash
         jsonb payload
         timestamptz used_at
     }
     live_events {
-        int id PK "= SSE event id"
+        int id PK "SSE event id"
         text type
         jsonb payload
         timestamptz created_at
     }
     audit_log {
         int id PK
-        int actor_user_id FK "nullable"
+        int actor_user_id FK "null means system"
         text action
         text entity_type
         int entity_id
@@ -109,6 +109,10 @@ erDiagram
         timestamptz created_at
     }
 ```
+
+Relationship notes: `audit_log.actor_user_id` is nullable (null = system or CLI);
+`oauth_refresh_tokens.family_id` groups all tokens from one authorization code;
+`oauth_login_states` stands alone (keyed by the random `state`, no foreign keys).
 
 ## What the database enforces
 

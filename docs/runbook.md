@@ -116,3 +116,17 @@ decision, which needs the owner's approval).
 **Monthly cost check.** Once a month, open Render → Billing and compare the invoice
 with `docs/cost.md` (expected ≈ $15). Anything above $20 means a plan or bandwidth
 change: find it before the next invoice.
+
+## 10. Rotating every secret (e.g. after sharing them for grading)
+
+Do staging first, check it, then production. Each step is independent.
+
+| Secret | Where | How | Side effect |
+| --- | --- | --- | --- |
+| `GOOGLE_CLIENT_SECRET` (local, staging, production) | Google Cloud → Credentials → OAuth client | **Add secret**, put the new value in Render → Environment → *Save, rebuild, and deploy*, check sign-in, then **delete** the old secret | none |
+| `AUTH_PRIVATE_JWK` | Render → Environment | `cd backend; npm run auth:keygen` into a scratch file, paste, deploy, delete the file | all users and MCP clients sign in again (old tokens fail signature checks) |
+| Grafana token in `OTEL_EXPORTER_OTLP_HEADERS` | Grafana Cloud → Access policies → token | create a new token, update the header value in Render, deploy, then delete the old token | none (a short gap in telemetry) |
+| Render deploy hooks | Render → service → Settings → Deploy Hook → **Regenerate** | update GitHub → Settings → Secrets → `RENDER_DEPLOY_HOOK_*` | Promote fails until updated |
+| Database credentials (`DATABASE_URL`) | Render → Postgres → Info | rotate the password if offered by the plan; otherwise ensure `ipAllowList` stays empty (no external access) | services reconnect on redeploy |
+
+Verify after each: `/healthz` ok, sign-in works on both environments, a Promote dry run passes.
